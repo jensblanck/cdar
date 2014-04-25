@@ -1,0 +1,12 @@
+Name:                cdar
+Version:             0.1
+Description:         cdar
+License:             AllRightsReserved
+License-file:        LICENSE
+Author:              Jens Blanck
+Maintainer:          jens.blanck@gmail.com
+Build-Depends:       base
+Build-Type:	     Simple
+
+Exposed-modules:     Data.CDAR.BR, Data.CDAR.CR Data.CDAR.Approx, Data.CDAR.Interval, Data.CDAR.Extended, Data.CDAR.Dyadic, Data.CDAR.IntegerLog, Data.CDAR.POrd
+ghc-options:         -Wall -O2 -package integer-gmp -package containers -package deepseq

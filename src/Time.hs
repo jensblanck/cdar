@@ -1,3 +1,5 @@
+module Time where
+
 import Text.Printf
 import Control.Exception
 import System.CPUTime

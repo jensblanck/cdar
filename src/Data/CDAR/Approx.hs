@@ -3,6 +3,7 @@ module Data.CDAR.Approx (Approx(..)
                         ,errorBits
                         ,errorBound
                         ,showA
+                        ,showABase
                         ,testShowA
 --                        ,valid
                         ,toEDI
@@ -77,26 +78,31 @@ errorBound :: Integer
 errorBound = 2^errorBits
 
 showA :: Approx -> String
-showA Bottom = "_|_"
-showA (Approx m e s)
-    | e == 0    = sign ++ showExactA b i f
-    | am < e    = "+-" ++ showNearZeroA b i' f'
-    | otherwise = sign ++ showInexactA b i f e
+showA = showABase 10
+
+showABase :: Int -> Approx -> String
+showABase _ Bottom = "_|_"
+showABase base (Approx m e s)
+    | e == 0 && (even base || s >= 0)
+                     = sign ++ showExactABase base b i f
+    | am < e         = "+-" ++ showNearZeroABase base b i' f'
+    | otherwise      = sign ++ showInexactABase base b i f e'
     where b = bit (max 0 (-s))
           am = abs m
           i = shift am s
+          e' = shift e (max 0 s)
           f = am .&. (b-1)
           i' = shift (am+e) s
           f' = (am+e) .&. (b-1)
           sign = if m < 0 then "-" else ""
 
-showExactA :: Integer -> Integer -> Integer -> String
-showExactA b i f = 
-    let g i' = let (q,r) = quotRem i' 10
+showExactABase :: Int -> Integer -> Integer -> Integer -> String
+showExactABase base b i f = 
+    let g i' = let (q,r) = quotRem i' (fromIntegral base)
                in if i' == 0 then Nothing
                   else Just (intToDigit (fromIntegral r), q)
         ip = reverse (unfoldr g i)
-        h f' = let (q,r) = quotRem (10*f') b
+        h f' = let (q,r) = quotRem ((fromIntegral base)*f') b
                in if f' == 0 then Nothing
                   else Just (intToDigit (fromIntegral q), r)
         fp = unfoldr h f
@@ -104,37 +110,37 @@ showExactA b i f =
            ++ (if null fp then "" else ".")
            ++ fp
 
-showNearZeroA :: Integer -> Integer -> Integer -> String
-showNearZeroA b i f =
-    let s = showExactA b i f
+showNearZeroABase :: Int -> Integer -> Integer -> Integer -> String
+showNearZeroABase base b i f =
+    let s = showExactABase base b i f
         t = takeWhile (flip elem "0.~") s
         u = takeWhile (/= '.') s
     in if null t
        then replicate (length u) '~'
        else t ++ "~"
 
-showInexactA :: Integer -> Integer -> Integer -> Integer -> String
-showInexactA b i f e =
-    let g (n,b',f') = let (q,r) = quotRem n 10
-                          z = (q, 10*b', r*b'+f')
+showInexactABase :: Int -> Integer -> Integer -> Integer -> Integer -> String
+showInexactABase base b i f e =
+    let g (n,b',f') = let (q,r) = quotRem n (fromIntegral base)
+                          z = (q, (fromIntegral base)*b', r*b'+f')
                       in if n == 0 then Nothing
                          else if e+f' <= b'
                               then Just (intToDigit (fromIntegral r), z)
                               else if e <= min f' b'
-                                   then Just (intToDigit ((fromIntegral r + 1) `rem` 10), z)
+                                   then Just (intToDigit ((fromIntegral r + 1) `rem` (fromIntegral base)), z)
                                    else Just ('~', z)
         intRev = unfoldr g (i,b,f)
         noFrac = case intRev of
                    [] -> False
                    (x:_) -> x == '~'
         int = if null intRev then "0" else reverse intRev
-        h (f',err) = let (q,r) = quotRem (10*f') b
-                         err' = 10*err
+        h (f',err) = let (q,r) = quotRem ((fromIntegral base)*f') b
+                         err' = (fromIntegral base)*err
                          z = (r, err')
                      in if err' + r <= b
                         then Just (intToDigit (fromIntegral q), z)
                         else if err' <= min r b
-                             then Just (intToDigit ((fromIntegral q + 1) `rem` 10), z)
+                             then Just (intToDigit ((fromIntegral q + 1) `rem` (fromIntegral base)), z)
                              else Nothing
         frac = unfoldr h (f,e)
     in int ++ if noFrac

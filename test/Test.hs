@@ -65,5 +65,7 @@ qcPropsD = testGroup "(checked by QuickCheck)"
   ]
 
 unitTests = testGroup "Unit tests"
-  [ testCase "showA" $ showA (Approx 7 2 2) @?= "~~"
+  [ testCase "showA 1" $ showA (Approx 7 2 2) @?= "3~"
+  , testCase "showA 2" $ showA (Approx 7 2 3) @?= "~~"
+  , testCase "showA 3" $ showA (Approx 13 13 2) @?= "1~~"
   ]

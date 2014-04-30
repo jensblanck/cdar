@@ -90,7 +90,7 @@ showABase base (Approx m e s)
     where b = bit (max 0 (-s))
           am = abs m
           i = shift am s
-          e' = shift e (max 0 s)
+          e' = max 1 $ shift e (max 0 s)
           f = am .&. (b-1)
           i' = shift (am+e) s
           f' = (am+e) .&. (b-1)

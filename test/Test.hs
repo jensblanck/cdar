@@ -131,13 +131,15 @@ scPropA = testGroup "(checked by smallcheck)"
                                                        a `better` (1/(1/a))
   , SC.testProperty "a*(1/a) contains 1" $ \a -> not (0 `approximatedBy` a) SC.==> 1 `approximatedBy` (a*(1/a))
   , SC.testProperty "boundErrorTerm" $
-    \a -> case a of {Approx _ _ _ -> let b@(Approx _ e _) = boundErrorTerm a
-		                    in (a `better` b) && (e < errorBound);
-                     Bottom       -> better a (boundErrorTerm a)}
+    \a -> case a of
+            Approx _ _ _ -> let b@(Approx _ e _) = boundErrorTerm a
+		            in (a `better` b) && (e < errorBound)
+            Bottom       -> better a (boundErrorTerm a)
   , SC.testProperty "limitSize" $
-    \a -> case a of {Approx _ _ _ -> let b@(Approx _ _ s) = limitSize 2 a
-		                    in (a `better` b) && (s >= -2);
-                     Bottom       -> better a (limitSize 2 a)}
+    \a -> case a of
+            Approx _ _ _ -> let b@(Approx _ _ s) = limitSize 2 a
+		            in (a `better` b) && (s >= -2)
+            Bottom       -> better a (limitSize 2 a)
   , SC.testProperty "sqrt" $ \a -> let b = abs a in better b $ (sqrtA 0 b)^2
   ]
 
@@ -164,15 +166,24 @@ qcPropA = testGroup "(checked by smallcheck)"
                                                        a `better` (1/(1/a))
   , QC.testProperty "a*(1/a) contains 1" $ \a -> not (0 `approximatedBy` a) QC.==> 1 `approximatedBy` (a*(1/a))
   , QC.testProperty "boundErrorTerm" $
-    \a -> case a of {Approx _ _ _ -> let b@(Approx _ e _) = boundErrorTerm a
-		                    in (a `better` b) && (e < errorBound);
-                     Bottom       -> better a (boundErrorTerm a)}
+    \a -> case a of 
+            Approx _ _ _ -> let b@(Approx _ e _) = boundErrorTerm a
+		            in (a `better` b) && (e < errorBound)
+            Bottom       -> better a (boundErrorTerm a)
   , QC.testProperty "limitSize" $
-    \a -> case a of {Approx _ _ _ -> let b@(Approx _ _ s) = limitSize 2 a
-		                    in (a `better` b) && (s >= -2);
-                     Bottom       -> better a (limitSize 2 a)}
+    \a -> case a of 
+            Approx _ _ _ -> let b@(Approx _ _ s) = limitSize 2 a
+		            in (a `better` b) && (s >= -2)
+            Bottom       -> better a (limitSize 2 a)
   , QC.testProperty "sqrt" $ \a -> let b = abs a in better b $ (sqrtA 0 b)^2
   ]
+
+testShowA :: Approx -> String
+testShowA a = let (Finite l) = lowerBound a
+                  (Finite u) = upperBound a
+              in showA (fromDyadic l) ++ "\n" ++
+                 showA a ++ "\n" ++
+                 showA (fromDyadic u) ++ "\n"
 
 unitTests = testGroup "Unit tests"
   [ testCase "showA 1" $ showA (Approx 7 2 2) @?= "3~"

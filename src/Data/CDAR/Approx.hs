@@ -4,7 +4,7 @@ module Data.CDAR.Approx (Approx(..)
                         ,errorBound
                         ,showA
                         ,showABase
-                        ,testShowA
+--                        ,testShowA
 --                        ,valid
                         ,toEDI
                         ,fromEDI
@@ -80,6 +80,14 @@ errorBound = 2^errorBits
 showA :: Approx -> String
 showA = showABase 10
 
+-- |Allows to show an `Approx` in bases up to 16.
+{- am is the absolute value of the significand
+   b corresponds to the value 1 with respect to the shift s -- this is used to find the digits in the auxiliary functions
+   i is the integral part of am
+   f is the fractional part of am
+   i' and f' are the integral and fractional parts relevant for near zero approximations
+   e' is the error term shifted appropriately when s positive, also set to at least 1 (otherwise odd bases will yield infinite expansions
+-}
 showABase :: Int -> Approx -> String
 showABase _ Bottom = "_|_"
 showABase base (Approx m e s)
@@ -121,14 +129,16 @@ showNearZeroABase base b i f =
 
 showInexactABase :: Int -> Integer -> Integer -> Integer -> Integer -> String
 showInexactABase base b i f e =
-    let g (n,b',f') = let (q,r) = quotRem n (fromIntegral base)
+    let g (0,b',f') = if b' < f'+e
+                      then Just ('1', (0, (fromIntegral base)*b', f'))
+                      else Nothing
+        g (n,b',f') = let (q,r) = quotRem n (fromIntegral base)
                           z = (q, (fromIntegral base)*b', r*b'+f')
-                      in if n == 0 then Nothing
-                         else if e+f' <= b'
-                              then Just (intToDigit (fromIntegral r), z)
-                              else if e <= min f' b'
-                                   then Just (intToDigit ((fromIntegral r + 1) `rem` (fromIntegral base)), z)
-                                   else Just ('~', z)
+                      in if e+f' <= b'
+                         then Just (intToDigit (fromIntegral r), z)
+                         else if e <= min f' b'
+                              then Just (intToDigit ((fromIntegral r + 1) `rem` (fromIntegral base)), z)
+                              else Just ('~', z)
         intRev = unfoldr g (i,b,f)
         noFrac = case intRev of
                    [] -> False
@@ -149,6 +159,7 @@ showInexactABase base b i f e =
 
 -- can be used like this: sequence_ . map (test) $ [piBorweinA (-s) | s <- [0..53]]
 
+{-
 testShowA :: Approx -> IO ()
 testShowA a = let (Finite l) = lowerBound a
                   (Finite u) = upperBound a
@@ -156,7 +167,7 @@ testShowA a = let (Finite l) = lowerBound a
                     putStrLn $ showA a
                     print (fromRational $ toRational u :: Double)
                     putStrLn "---"
-
+-}
 {-
 valid :: Approx -> Bool
 valid Bottom = True

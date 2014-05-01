@@ -77,7 +77,7 @@ polynomial as x =
 
 taylor :: [BR Approx] -> BR Approx -> BR Approx
 taylor as x =
-    (\as' x' l -> sum . takeWhile nonZero . map (limitAndBound l) $ zipWith (*) as' (pow x'))
+    (\as' x' l -> sum . takeWhile nonZeroCentred . map (limitAndBound l) $ zipWith (*) as' (pow x'))
     <$> transposeBR as <*> x <*> resources
 
 epsilon :: BR Approx

@@ -1,11 +1,8 @@
---{-# OPTIONS_GHC -fglasgow-exts #-}
 module Data.CDAR.Approx (Approx(..)
                         ,errorBits
                         ,errorBound
                         ,showA
-                        ,showABase
---                        ,testShowA
---                        ,valid
+                        ,showInBaseA
                         ,toEDI
                         ,fromEDI
                         ,lowerBound
@@ -21,8 +18,6 @@ module Data.CDAR.Approx (Approx(..)
                         ,recipDyadic
                         ,modA
                         ,divModA
---                        ,normalise
---                        ,roundApprox
                         ,toDouble
                         ,toDouble2
                         ,precision
@@ -33,12 +28,11 @@ module Data.CDAR.Approx (Approx(..)
                         ,limitAndBound
                         ,poly
                         ,pow
-                        ,bincoffs
                         ,powers
                         ,sqrtA
                         ,sqrtD
                         ,shiftD
-                        ,nonZero
+                        ,nonZeroCentred
                         ,piMachinA
                         ,piBorweinA
                         ,piAgmA
@@ -71,6 +65,9 @@ instance NFData Approx where
     rnf Bottom = ()
     rnf (Approx m e s) = rnf (m,e,s) `seq` ()
 
+-- |Number of bits that error term is allowed to take up. A larger size allows
+-- for more precise but slightly more costly computations. The value here is
+-- suggested by test runs.
 errorBits :: Int
 errorBits = 10
 
@@ -78,7 +75,7 @@ errorBound :: Integer
 errorBound = 2^errorBits
 
 showA :: Approx -> String
-showA = showABase 10
+showA = showInBaseA 10
 
 -- |Allows to show an `Approx` in bases up to 16.
 {- am is the absolute value of the significand
@@ -88,13 +85,13 @@ showA = showABase 10
    i' and f' are the integral and fractional parts relevant for near zero approximations
    e' is the error term shifted appropriately when s positive, also set to at least 1 (otherwise odd bases will yield infinite expansions
 -}
-showABase :: Int -> Approx -> String
-showABase _ Bottom = "_|_"
-showABase base (Approx m e s)
+showInBaseA :: Int -> Approx -> String
+showInBaseA _ Bottom = "_|_"
+showInBaseA base (Approx m e s)
     | e == 0 && (even base || s >= 0)
-                     = sign ++ showExactABase base b i f
-    | am < e         = "+-" ++ showNearZeroABase base b i' f'
-    | otherwise      = sign ++ showInexactABase base b i f e'
+                     = sign ++ showExactA base b i f
+    | am < e         = "+-" ++ showNearZeroA base b i' f'
+    | otherwise      = sign ++ showInexactA base b i f e'
     where b = bit (max 0 (-s))
           am = abs m
           i = shift am s
@@ -104,8 +101,8 @@ showABase base (Approx m e s)
           f' = (am+e) .&. (b-1)
           sign = if m < 0 then "-" else ""
 
-showExactABase :: Int -> Integer -> Integer -> Integer -> String
-showExactABase base b i f = 
+showExactA :: Int -> Integer -> Integer -> Integer -> String
+showExactA base b i f = 
     let g i' = let (q,r) = quotRem i' (fromIntegral base)
                in if i' == 0 then Nothing
                   else Just (intToDigit (fromIntegral r), q)
@@ -118,17 +115,17 @@ showExactABase base b i f =
            ++ (if null fp then "" else ".")
            ++ fp
 
-showNearZeroABase :: Int -> Integer -> Integer -> Integer -> String
-showNearZeroABase base b i f =
-    let s = showExactABase base b i f
+showNearZeroA :: Int -> Integer -> Integer -> Integer -> String
+showNearZeroA base b i f =
+    let s = showExactA base b i f
         t = takeWhile (flip elem "0.~") s
         u = takeWhile (/= '.') s
     in if null t
        then replicate (length u) '~'
        else t ++ "~"
 
-showInexactABase :: Int -> Integer -> Integer -> Integer -> Integer -> String
-showInexactABase base b i f e =
+showInexactA :: Int -> Integer -> Integer -> Integer -> Integer -> String
+showInexactA base b i f e =
     let g (0,b',f') = if b' < f'+e
                       then Just ('1', (0, (fromIntegral base)*b', f'))
                       else Nothing
@@ -468,8 +465,8 @@ poly as x =
 pow :: (Num a) => a -> [a]
 pow x = iterate (* x) 1
 
-bincoffs :: (Num a) => [[a]]
-bincoffs =
+binomialCoefficients :: (Num a) => [[a]]
+binomialCoefficients =
     let f ss = 1 : zipWith (+) ss (tail ss) ++ [1]
     in iterate f [1]
 
@@ -482,7 +479,7 @@ powers (Approx m e s) =
         sumAlt (x:[]) = (x,0)
         sumAlt (x:y:xs) = let (a,b) = sumAlt xs in (a+x,b+y)
         g s' (m', e') = Approx m' e' s'
-    in zipWith g (iterate (+s) 0) $ map (sumAlt . f) bincoffs
+    in zipWith g (iterate (+s) 0) $ map (sumAlt . f) binomialCoefficients
 powers _ = repeat Bottom
 
 sqrtA :: Int -> Approx -> Approx
@@ -501,11 +498,10 @@ sqrtA k a@(Approx m e s)
                       (n':^t') = sqrtD' s' ((m+e):^s) l
                   in fromEDI $ Interval.Interval (Finite ((n-1):^t)) (Finite ((n'+1):^t'))
 
---checks for insignificant approximations rather than actual non-zero check
-nonZero :: Approx -> Bool
-nonZero Bottom = False
-nonZero (Approx 0 _ _) = False
-nonZero _ = True
+nonZeroCentred :: Approx -> Bool
+nonZeroCentred Bottom = False
+nonZeroCentred (Approx 0 _ _) = False
+nonZeroCentred _ = True
 
 piMachinA :: Int -> Approx
 piMachinA t = let (m:^s) = piMachinD t in Approx m 1 s

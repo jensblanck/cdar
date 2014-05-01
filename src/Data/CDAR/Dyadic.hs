@@ -13,7 +13,7 @@ import Data.CDAR.IntegerLog
 infix 8 :^
 
 -- |The Dyadic data type.
-data Dyadic = Integer :^ Int deriving Read
+data Dyadic = Integer :^ Int deriving (Read,Show)
 
 instance Eq Dyadic where
     a :^ s == b :^ t | s <= t    = a == unsafeShiftL b (t-s)
@@ -22,13 +22,6 @@ instance Eq Dyadic where
 instance Ord Dyadic where
     compare (a :^ s) (b :^ t) | s <= t    = compare a (unsafeShiftL b (t-s))
 			      | otherwise = compare (unsafeShiftL a (s-t)) b
-
-instance Show Dyadic where
-    showsPrec p d = let a :^ s = normalise d
-                    in showParen (p > 8) $
-                       showsPrec 9 a .
-                       showString " :^ " .
-                       showsPrec 9 s
 
 -- |Normalises a dyadic number a :^ s by dividing out factors of 2 from a and
 -- adjusting the exponent accordingly.

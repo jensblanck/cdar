@@ -74,6 +74,11 @@ errorBits = 10
 errorBound :: Integer
 errorBound = 2^errorBits
 
+-- |The default cutoff for diverging computations. May well be chosen much
+-- smaller. 31 corresponds to about 10 decimal places.
+defaultPrecision :: Int
+defaultPrecision = 31
+
 showA :: Approx -> String
 showA = showInBaseA 10
 
@@ -86,11 +91,11 @@ showA = showInBaseA 10
    e' is the error term shifted appropriately when s positive, also set to at least 1 (otherwise odd bases will yield infinite expansions
 -}
 showInBaseA :: Int -> Approx -> String
-showInBaseA _ Bottom = "_|_"
+showInBaseA _ Bottom = "⊥"
 showInBaseA base (Approx m e s)
     | e == 0 && (even base || s >= 0)
                      = sign ++ showExactA base b i f
-    | am < e         = "+-" ++ showNearZeroA base b i' f'
+    | am < e         = "±" ++ showNearZeroA base b i' f'
     | otherwise      = sign ++ showInexactA base b i f e'
     where b = bit (max 0 (-s))
           am = abs m
@@ -153,23 +158,6 @@ showInexactA base b i f e =
     in int ++ if noFrac
               then ""
               else "." ++ frac ++ "~"
-
--- can be used like this: sequence_ . map (test) $ [piBorweinA (-s) | s <- [0..53]]
-
-{-
-testShowA :: Approx -> IO ()
-testShowA a = let (Finite l) = lowerBound a
-                  (Finite u) = upperBound a
-              in do print (fromRational $ toRational l :: Double)
-                    putStrLn $ showA a
-                    print (fromRational $ toRational u :: Double)
-                    putStrLn "---"
--}
-{-
-valid :: Approx -> Bool
-valid Bottom = True
-valid (Approx _ e _) = e >= 0
--}
 
 toEDI :: Approx -> EDI
 toEDI (Approx m e s) = Interval.Interval (Finite ((m-e):^s)) (Finite ((m+e):^s))
@@ -285,9 +273,9 @@ instance Num Approx where
 toApprox :: Int -> Rational -> Approx
 toApprox t r = Approx (2 * round (r*2^^t)) 1 (-t - 1)
 
--- Not a proper Fractional type as Approx are intervals
+-- |Not a proper Fractional type as Approx are intervals
 instance Fractional Approx where
-    fromRational = toApprox 31    -- Approximately 10 digits
+    fromRational = toApprox defaultPrecision
     recip Bottom = Bottom
     recip (Approx m e s)
 	| (abs m) > e =	let d = m*m-e*e
@@ -334,7 +322,7 @@ divModA (Approx m e s) (Approx n f t) =
     in (fromIntegral d, Approx m' e' r)
 divModA _ _ = (Bottom, Bottom)
 
--- Not a proper Ord type as Approx are intervals
+-- |Not a proper Ord type as Approx are intervals
 instance Ord Approx where
     compare (Approx m e s) (Approx n f t)
 	| abs ((m:^s)-(n:^t)) > (e:^s)+(f:^t) = compare (m:^s) (n:^t)
@@ -351,24 +339,6 @@ instance PartialOrd Approx where
               f GreaterThan = Just GT
               f _ = Nothing
 
-{-
-instance PartialOrd Approx where
-    partialCompare a@(Approx m e s) b@(Approx n f t)
-        | exact a && exact b                  = Just $ compare (m:^s) (n:^t)
-        | abs ((m:^s)-(n:^t)) > (e:^s)+(f:^t) = Just $ compare (m:^s) (n:^t)
-        | otherwise                           = Nothing
-    partialCompare _ _ = Nothing
--}
-
-{-
-normalise :: Approx -> Approx
-normalise (Approx 0 0 _) = Approx 0 0 0
-normalise a@(Approx m e s)
-    | even m && even e = normalise $ Approx (div m 2) (div e 2) (s+1)
-    | otherwise = a
-normalise _ = Bottom
--}
-
 instance Real Approx where
     toRational (Approx m e s) = approxRational
 				  (toRational (m:^s))
@@ -380,25 +350,6 @@ toDouble = fromRational . toRational . centre
 
 toDouble2 :: Approx -> Interval.Interval Double
 toDouble2 = fmap (fromRational . toRational) . toEDI
-
-{-
-roundApprox :: Approx -> Int -> Approx
-roundApprox = roundApprox' 0
-
-roundApprox' :: Int -> Approx -> Int -> Approx
-roundApprox' i a@(Approx m e s) j = 
-    let q = 1 + integerLog2 e
-	k = (q - j + i) `max` 0
-	x = bit k
-	t = s + k
-	(n', r') = m `divMod` x
-	(n, r) = if r' > (x `div` 2) then (n'+1, abs (r'-x))
-		 else (n', r')
-	e' = - (unsafeShiftR (-e-r) k)
-      in if integerLog2 e' < j then Approx n e' t
-	 else roundApprox' (i+1) a j
-roundApprox' _ _ _ = Bottom
--}
 
 precision :: Approx -> Extended Int
 precision (Approx _ 0 _) = PosInf
@@ -437,12 +388,10 @@ limitSize l a@(Approx m e s)
     | otherwise = a
     where k = (-s)-l
 
--- 31 gives approximately 10 decimal digits of precision
-
 checkPrecisionLeft :: Approx -> Approx
 checkPrecisionLeft a
-	| precision a > 31 = a
-	| otherwise        = throw $ LossOfPrecision
+	| precision a > pure defaultPrecision = a
+	| otherwise = throw $ LossOfPrecision
 
 limitAndBound :: Int -> Approx -> Approx
 limitAndBound limit =
@@ -645,43 +594,3 @@ agmLn t x = let t' = t - 10
                 pi = boundErrorTerm $ unionApprox (2*(snd (last ss))*e) (2*(fst (last ss))*e)
             in r --[a,b,c,d,b2,b3,b4,l,u,r,e,pi]
                 
-
-
--- Auxiliary. May be removed.
-{-
-showDHex :: Dyadic -> String
-showDHex (m:^s) = let k = max 0 $ integerLog2 m - 7
-                  in showHex (unsafeShiftR m k) ":^" ++ show (s+k)
-
-getNmsb :: Int -> Integer -> Int
-getNmsb i n = let k = max 0 $ integerLog2 n - (i-1)
-              in fromIntegral $ unsafeShiftR n k
-
-getM :: Approx -> Integer
-getM (Approx m _ _) = m
-
-class ShowBinary a where
-    showBinary :: a -> String
-
-showBinaryInteger :: Integer -> String
-showBinaryInteger 0 = "0"
-showBinaryInteger n = reverse $ f n
-    where f 0 = []
-          f n = intToDigit (fromIntegral (n `rem` 2)) : f (n `quot` 2)
-
-instance ShowBinary Int where
-    showBinary n = if n >= 0
-                   then showBinaryInteger $ fromIntegral n
-                   else showBinaryInteger $ fromIntegral (-n)
-
-instance ShowBinary Integer where
-    showBinary n = if n >= 0
-                   then showBinaryInteger n
-                   else showBinaryInteger (-n)
-
-instance ShowBinary Dyadic where
-    showBinary (m:^s) = showBinary m ++ ":^" ++ show s
-
-instance ShowBinary Approx where
-    showBinary (Approx m e s) = "Approx " ++ showBinary m ++ " " ++ showBinary e ++ " " ++ show s
--}

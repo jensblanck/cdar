@@ -144,7 +144,7 @@ instance Floating (BR Approx) where
     sqrt = sqrtBR
     pi = piBorweinBR
     exp = undefined
-    log = undefined
+    log x = agmLnA <$> fmap negate resources <*> x
     sin = sinBR
     cos = sin . (halfPi +)
     asin = undefined

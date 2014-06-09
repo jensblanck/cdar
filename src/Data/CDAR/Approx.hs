@@ -447,6 +447,63 @@ sqrtA k a@(Approx m e s)
                       (n':^t') = sqrtD' s' ((m+e):^s) l
                   in fromEDI $ Interval.Interval (Finite ((n-1):^t)) (Finite ((n'+1):^t'))
 
+-- Binary splitting
+
+abpq :: Num a => [Integer] -> [Integer] -> [a] -> [a] -> Int -> Int -> (a, a, Integer, a)
+abpq as bs ps qs n1 n2
+    | n == 1 = (ps !! n1, qs !! n1, bs !! n1, fromIntegral (as !! n1) * ps !! n1)
+    | n > 1  =
+        let (pl, ql, bl, tl) = abpq as bs ps qs n1 m
+            (pr, qr, br, tr) = abpq as bs ps qs m n2
+        in (pl * pr, ql * qr, bl * br, fromIntegral br * qr * tl + fromIntegral bl * pl * tr)
+    | otherwise = error "Non-expected case in binary splitting"
+  where
+    n = n2 - n1
+    m = (n1 + n2 + 1) `div` 2
+
+ones = repeat 1
+
+sqrA (Approx m e s) = Approx (m^2 + e^2) (2*abs m*e) (2*s)
+
+expA Bottom _ = undefined --Bottom
+expA a@(Approx m e s) res =
+    let r = max 0 (s + 2 + integerLog2 m)
+        -- a' is a scaled by 2^k so that 1/4 < a' < 1/2
+        a' = Approx m e (s-r)
+        -- compute n, number of terms
+        (Finite c) = min (significance a) (Finite res)
+        n = (5 + c `div` (1 + integerLog2 (fromIntegral c))) * 9 `div` 5
+        (p, q, b, t) = abpq ones
+                            ones
+                            (1:repeat a')
+                            (1:[1..])
+                            0
+                            n
+        nextTerm = a * p / (fromIntegral n * q)
+        ss = iterate (boundErrorTerm . sqrA) $ fudge (t/(fromIntegral b*q)) nextTerm
+    in ss !! r
+
+fudge (Approx m e s) (Approx m' e' s') =
+    let m'' = 1 + (abs m' + e') `shift` (s' - s + 1)
+    in Approx m (e+m'') s
+
+{-
+abpq :: [Integer] -> [Integer] -> [Integer] -> [Integer] -> Int -> Int
+     -> (Integer, Integer, Integer, Integer)
+abpq as bs ps qs n1 n2
+    | n == 1 = (ps !! n1, qs !! n1, bs !! n1, as !! n1 * ps !! n1)
+    | n > 1  =
+        let (pl, ql, bl, tl) = abpq as bs ps qs n1 m
+            (pr, qr, br, tr) = abpq as bs ps qs m n2
+        in (pl * pr, ql * qr, bl * br, br * qr * tl + bl * pl * tr)
+    | otherwise = error "Non-expected case in binary splitting"
+  where
+    n = n2 - n1
+    m = (n1 + n2 + 1) `div` 2
+-}      
+
+--
+
 nonZeroCentred :: Approx -> Bool
 nonZeroCentred Bottom = False
 nonZeroCentred (Approx 0 _ _) = False

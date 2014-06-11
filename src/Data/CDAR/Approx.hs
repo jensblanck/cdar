@@ -32,6 +32,7 @@ module Data.CDAR.Approx (Approx(..)
                         ,sqrtA
                         ,sqrtD
                         ,shiftD
+                        ,expA
                         ,nonZeroCentred
                         ,piMachinA
                         ,piBorweinA

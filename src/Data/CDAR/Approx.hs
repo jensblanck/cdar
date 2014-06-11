@@ -47,7 +47,7 @@ import qualified Data.CDAR.Interval as Interval
 import Data.CDAR.Extended
 import Data.CDAR.IntegerLog
 import Data.CDAR.POrd
-import Data.List (unfoldr)
+import Data.List (unfoldr, zipWith4)
 import Data.Char (intToDigit)
 import Control.Applicative
 import Control.Exception
@@ -452,6 +452,19 @@ sqrtA k a@(Approx m e s)
 abpq :: Num a => [Integer] -> [Integer] -> [a] -> [a] -> Int -> Int -> (a, a, Integer, a)
 abpq as bs ps qs n1 n2
     | n == 1 = (ps !! n1, qs !! n1, bs !! n1, fromIntegral (as !! n1) * ps !! n1)
+-- {-
+    | n < 6  = let as' = take n $ drop n1 as
+                   bs' = take n $ drop n1 bs
+                   ps' = take n $ drop n1 ps
+                   qs' = take n $ drop n1 qs
+                   pbs = product bs'
+                   bs'' = map (pbs `div`) bs'
+                   ps'' = scanl1 (*) ps'
+                   qs'' = scanr1 (*) (tail qs' ++ [1])
+               in (ps'' !! (n-1), product qs', pbs
+                  , sum $ zipWith4 (\a b p q -> fromIntegral a * fromIntegral b * p * q)
+                                   as' bs'' ps'' qs'')
+-- -}
     | n > 1  =
         let (pl, ql, bl, tl) = abpq as bs ps qs n1 m
             (pr, qr, br, tr) = abpq as bs ps qs m n2

@@ -12,5 +12,5 @@ pq a b
     | otherwise = (sum $ scanl1 (*) [b,b-1..a+1], product [a+1..b])
 
 euler n = let (p,q) = pq 0 n
-          in map showA . take 3 . (\(BR l) -> l) $ (fromIntegral p :: BR Approx) / fromIntegral q
+          in map showA . take 6 . (\(BR l) -> l) $ (fromIntegral p :: BR Approx) / fromIntegral q
 

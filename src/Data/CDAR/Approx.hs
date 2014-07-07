@@ -477,8 +477,10 @@ abpq as bs ps qs n1 n2
 
 ones = repeat 1
 
+sqrA :: Approx -> Approx
 sqrA (Approx m e s) = Approx (m^2 + e^2) (2*abs m*e) (2*s)
 
+expA :: Approx -> Int -> Approx
 expA Bottom _ = undefined --Bottom
 expA a@(Approx m e s) res =
     let r = max 0 (s + 2 + integerLog2 m)
@@ -497,6 +499,8 @@ expA a@(Approx m e s) res =
         ss = iterate (boundErrorTerm . sqrA) $ fudge (t/(fromIntegral b*q)) nextTerm
     in ss !! r
 
+-- Second argument is noice to be added to first argument.
+fudge :: Approx -> Approx -> Approx
 fudge (Approx m e s) (Approx m' e' s') =
     let m'' = 1 + (abs m' + e') `shift` (s' - s + 1)
     in Approx m (e+m'') s

@@ -53,6 +53,7 @@ import Data.Char (intToDigit)
 import Control.Applicative
 import Control.Exception
 import Control.DeepSeq
+import Control.Parallel.Strategies
 
 type EDI = Interval.Interval (Extended Dyadic)
 
@@ -64,7 +65,7 @@ data Approx = Approx Integer Integer Int
 
 instance NFData Approx where
     rnf Bottom = ()
-    rnf (Approx m e s) = rnf (m,e,s) `seq` ()
+    rnf (Approx m e s) = rnf m `seq` rnf e `seq` rnf s
 
 -- |Number of bits that error term is allowed to take up. A larger size allows
 -- for more precise but slightly more costly computations. The value here is
@@ -475,6 +476,32 @@ abpq as bs ps qs n1 n2
     n = n2 - n1
     m = (n1 + n2 + 1) `div` 2
 
+--abpq' :: Num a => [Integer] -> [Integer] -> [a] -> [a] -> Int -> Int -> (a, a, Integer, a)
+abpq' :: [Integer] -> [Integer] -> [Approx] -> [Approx] -> Int -> Int -> (Approx, Approx, Integer, Approx)
+abpq' as bs ps qs n1 n2
+    | n == 1 = (ps !! n1, qs !! n1, bs !! n1, fromIntegral (as !! n1) * ps !! n1)
+-- {-
+    | n < 6  = let as' = take n $ drop n1 as
+                   bs' = take n $ drop n1 bs
+                   ps' = take n $ drop n1 ps
+                   qs' = take n $ drop n1 qs
+                   pbs = product bs'
+                   bs'' = map (pbs `div`) bs'
+                   ps'' = scanl1 (*) ps'
+                   qs'' = scanr1 (*) (tail qs' ++ [1])
+               in (ps'' !! (n-1), product qs', pbs
+                  , sum $ zipWith4 (\a b p q -> fromIntegral a * fromIntegral b * p * q)
+                                   as' bs'' ps'' qs'')
+-- -}
+    | n > 5  =
+        let ((pl, ql, bl, tl), (pr, qr, br, tr)) =
+              (abpq' as bs ps qs n1 m, abpq' as bs ps qs m n2) `using` parTuple2 rdeepseq rdeepseq
+        in (pl * pr, ql * qr, bl * br, fromIntegral br * qr * tl + fromIntegral bl * pl * tr)
+    | otherwise = error "Non-expected case in binary splitting"
+  where
+    n = n2 - n1
+    m = (n1 + n2 + 1) `div` 2
+
 ones = repeat 1
 
 sqrA :: Approx -> Approx
@@ -489,7 +516,7 @@ expA a@(Approx m e s) res =
         -- compute n, number of terms
         (Finite c) = min (significance a) (Finite res)
         n = (5 + c `div` (1 + integerLog2 (fromIntegral c))) * 9 `div` 5
-        (p, q, b, t) = abpq ones
+        (p, q, b, t) = abpq' ones
                             ones
                             (1:repeat a')
                             (1:[1..])

@@ -46,13 +46,13 @@ euler n =
     let t = n `div` 16
         pqs = map {- parMap rpar -} pq $ zip [0,t..15*t] [t,2*t..16*t]
         [(p,q)] = contract . contract . contract . contract $ pqs
-        --a = (fromIntegral p :: Approx) / fromIntegral q
+        a = (fromIntegral p :: Approx) / fromIntegral q
 --        e = (1 :: Approx) / fromIntegral (q*(n+1))
-    in force (p,q) --boundErrorTerm $ a --fudge a e
+    in boundErrorTerm $ a --fudge a e
 
 contract [] = []
 contract [a] = [a]
-contract (a:b:as) = pqCombine a b : contract as `using` parList rpar
+contract (a:b:as) = pqCombine a b : contract as `using` parList rseq
 
 {-
 euler n =

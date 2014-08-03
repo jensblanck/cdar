@@ -33,6 +33,7 @@ module Data.CDAR.Approx (Approx(..)
                         ,sqrtD
                         ,shiftD
                         ,expA
+                        ,lnA
                         ,nonZeroCentred
                         ,piMachinA
                         ,piBorweinA
@@ -90,7 +91,8 @@ showA = showInBaseA 10
    i is the integral part of am
    f is the fractional part of am
    i' and f' are the integral and fractional parts relevant for near zero approximations
-   e' is the error term shifted appropriately when s positive, also set to at least 1 (otherwise odd bases will yield infinite expansions
+   e' is the error term shifted appropriately when s positive, also set to at least 1
+     (otherwise odd bases will yield infinite expansions)
 -}
 showInBaseA :: Int -> Approx -> String
 showInBaseA _ Bottom = "⊥"
@@ -454,7 +456,6 @@ sqrtA k a@(Approx m e s)
 abpq :: Num a => [Integer] -> [Integer] -> [a] -> [a] -> Int -> Int -> (a, a, Integer, a)
 abpq as bs ps qs n1 n2
     | n == 1 = (ps !! n1, qs !! n1, bs !! n1, fromIntegral (as !! n1) * ps !! n1)
--- {-
     | n < 6  = let as' = take n $ drop n1 as
                    bs' = take n $ drop n1 bs
                    ps' = take n $ drop n1 ps
@@ -466,36 +467,9 @@ abpq as bs ps qs n1 n2
                in (ps'' !! (n-1), product qs', pbs
                   , sum $ zipWith4 (\a b p q -> fromIntegral a * fromIntegral b * p * q)
                                    as' bs'' ps'' qs'')
--- -}
     | n > 1  =
         let (pl, ql, bl, tl) = abpq as bs ps qs n1 m
             (pr, qr, br, tr) = abpq as bs ps qs m n2
-        in (pl * pr, ql * qr, bl * br, fromIntegral br * qr * tl + fromIntegral bl * pl * tr)
-    | otherwise = error "Non-expected case in binary splitting"
-  where
-    n = n2 - n1
-    m = (n1 + n2 + 1) `div` 2
-
---abpq' :: Num a => [Integer] -> [Integer] -> [a] -> [a] -> Int -> Int -> (a, a, Integer, a)
-abpq' :: [Integer] -> [Integer] -> [Approx] -> [Approx] -> Int -> Int -> (Approx, Approx, Integer, Approx)
-abpq' as bs ps qs n1 n2
-    | n == 1 = (ps !! n1, qs !! n1, bs !! n1, fromIntegral (as !! n1) * ps !! n1)
--- {-
-    | n < 6  = let as' = take n $ drop n1 as
-                   bs' = take n $ drop n1 bs
-                   ps' = take n $ drop n1 ps
-                   qs' = take n $ drop n1 qs
-                   pbs = product bs'
-                   bs'' = map (pbs `div`) bs'
-                   ps'' = scanl1 (*) ps'
-                   qs'' = scanr1 (*) (tail qs' ++ [1])
-               in (ps'' !! (n-1), product qs', pbs
-                  , sum $ zipWith4 (\a b p q -> fromIntegral a * fromIntegral b * p * q)
-                                   as' bs'' ps'' qs'')
--- -}
-    | n > 5  =
-        let ((pl, ql, bl, tl), (pr, qr, br, tr)) =
-              (abpq' as bs ps qs n1 m, abpq' as bs ps qs m n2) `using` parTuple2 rdeepseq rdeepseq
         in (pl * pr, ql * qr, bl * br, fromIntegral br * qr * tl + fromIntegral bl * pl * tr)
     | otherwise = error "Non-expected case in binary splitting"
   where
@@ -516,7 +490,7 @@ expA a@(Approx m e s) res =
         -- compute n, number of terms
         (Finite c) = min (significance a) (Finite res)
         n = (5 + c `div` (1 + integerLog2 (fromIntegral c))) * 9 `div` 5
-        (p, q, b, t) = abpq' ones
+        (p, q, b, t) = abpq ones
                             ones
                             (1:repeat a')
                             (1:[1..])
@@ -526,26 +500,28 @@ expA a@(Approx m e s) res =
         ss = iterate (boundErrorTerm . sqrA) $ fudge (t/(fromIntegral b*q)) nextTerm
     in ss !! r
 
+lnA :: Approx -> Int -> Approx
+lnA Bottom _ = undefined --Bottom
+lnA a@(Approx m e s) res =
+    -- No range reduction yet, so converges only for 1/2 < x < 3/2
+    let m' = m - bit (-s)
+        a' = Approx m' e s
+        Finite n = 12 --significance a'
+        (p, q, b, t) = abpq ones
+                            [1..]
+                            (a':repeat (-a'))
+                            (repeat 1 :: [Approx])
+                            0
+                            n
+        nextTerm = a' * abs p
+    in fudge (t/(fromIntegral b*q)) nextTerm
+
 -- Second argument is noice to be added to first argument.
+-- Used to allow for the error term when truncating a series.
 fudge :: Approx -> Approx -> Approx
 fudge (Approx m e s) (Approx m' e' s') =
     let m'' = 1 + (abs m' + e') `shift` (s' - s + 1)
     in Approx m (e+m'') s
-
-{-
-abpq :: [Integer] -> [Integer] -> [Integer] -> [Integer] -> Int -> Int
-     -> (Integer, Integer, Integer, Integer)
-abpq as bs ps qs n1 n2
-    | n == 1 = (ps !! n1, qs !! n1, bs !! n1, as !! n1 * ps !! n1)
-    | n > 1  =
-        let (pl, ql, bl, tl) = abpq as bs ps qs n1 m
-            (pr, qr, br, tr) = abpq as bs ps qs m n2
-        in (pl * pr, ql * qr, bl * br, br * qr * tl + bl * pl * tr)
-    | otherwise = error "Non-expected case in binary splitting"
-  where
-    n = n2 - n1
-    m = (n1 + n2 + 1) `div` 2
--}      
 
 --
 

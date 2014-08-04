@@ -487,7 +487,7 @@ expA a@(Approx m e s) res =
     let r = max 0 (s + 2 + integerLog2 m)
         -- a' is a scaled by 2^k so that 1/4 < a' < 1/2
         a' = Approx m e (s-r)
-        -- compute n, number of terms
+        -- compute n, number of terms, by estimating factorial
         (Finite c) = min (significance a) (Finite res)
         n = (5 + c `div` (1 + integerLog2 (fromIntegral c))) * 9 `div` 5
         (p, q, b, t) = abpq ones
@@ -501,20 +501,23 @@ expA a@(Approx m e s) res =
     in ss !! r
 
 lnA :: Approx -> Int -> Approx
-lnA Bottom _ = undefined --Bottom
+lnA Bottom _ = Bottom
 lnA a@(Approx m e s) res =
-    -- No range reduction yet, so converges only for 1/2 < x < 3/2
-    let m' = m - bit (-s)
-        a' = Approx m' e s
-        Finite n = 12 --significance a'
-        (p, q, b, t) = abpq ones
-                            [1..]
-                            (a':repeat (-a'))
-                            (repeat 1 :: [Approx])
-                            0
-                            n
-        nextTerm = a' * abs p
-    in fudge (t/(fromIntegral b*q)) nextTerm
+    if m <= e then Bottom -- only defined for strictly positive arguments
+    else
+        -- No range reduction yet, so converges only for 1/2 < x < 3/2
+        let m' = m - bit (-s)
+            a' = Approx m' e s
+            r = max 0 (s + 2 + integerLog2 m')
+            Finite n = min (significance a') (Finite res)
+            (p, q, b, t) = abpq ones
+                           [1..]
+                           (a':repeat (-a'))
+                           (repeat 1 :: [Approx])
+                           0
+                           n
+            nextTerm = a' * abs p
+        in boundErrorTerm $ fudge (t/(fromIntegral b*q) + fromIntegral r * ln2A res) nextTerm
 
 -- Second argument is noice to be added to first argument.
 -- Used to allow for the error term when truncating a series.

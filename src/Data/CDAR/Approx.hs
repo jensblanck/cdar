@@ -34,6 +34,8 @@ module Data.CDAR.Approx (Approx(..)
                         ,shiftD
                         ,expA
                         ,lnA
+                        ,sinA
+                        ,cosA
                         ,nonZeroCentred
                         ,piMachinA
                         ,piBorweinA
@@ -505,19 +507,83 @@ lnA Bottom _ = Bottom
 lnA a@(Approx m e s) res =
     if m <= e then Bottom -- only defined for strictly positive arguments
     else
-        -- No range reduction yet, so converges only for 1/2 < x < 3/2
         let m' = m - bit (-s)
             a' = Approx m' e s
             r = max 0 (s + 2 + integerLog2 m')
             Finite n = min (significance a') (Finite res)
             (p, q, b, t) = abpq ones
-                           [1..]
-                           (a':repeat (-a'))
-                           (repeat 1 :: [Approx])
-                           0
-                           n
+                                [1..]
+                                (a':repeat (-a'))
+                                (repeat 1 :: [Approx])
+                                0
+                                n
             nextTerm = a' * abs p
         in boundErrorTerm $ fudge (t/(fromIntegral b*q) + fromIntegral r * ln2A res) nextTerm
+
+sinA :: Approx -> Int -> Approx
+sinA Bottom _ = Bottom
+sinA a res =
+    let pi = piBorweinA (-res)
+        a1@(Approx m' e' s') = 4 * a / pi
+        (k,m1) = m' `divMod` bit (-s')
+        a2 = pi * fromDyadic (1:^(-2)) * (Approx m1 e' s')
+    in case k `mod` 8 of
+         0 -> sinInRangeA a2 res
+         1 -> cosInRangeA (pi * fromDyadic (1:^(-2)) - a2) res
+         2 -> cosInRangeA a2 res
+         3 -> sinInRangeA (pi * fromDyadic (1:^(-2)) - a2) res
+         4 -> - sinInRangeA a2 res
+         5 -> - cosInRangeA (pi * fromDyadic (1:^(-2)) - a2) res
+         6 -> - cosInRangeA a2 res
+         7 -> - sinInRangeA (pi * fromDyadic (1:^(-2)) - a2) res
+
+cosA :: Approx -> Int -> Approx
+cosA Bottom _ = Bottom
+cosA a res =
+    let pi = piBorweinA (-res)
+        a1@(Approx m' e' s') = 4 * a / pi
+        (k,m1) = m' `divMod` bit (-s')
+        a2 = pi * fromDyadic (1:^(-2)) * (Approx m1 e' s')
+    in case k `mod` 8 of
+         0 -> cosInRangeA a2 res
+         1 -> sinInRangeA (pi * fromDyadic (1:^(-2)) - a2) res
+         2 -> - sinInRangeA a2 res
+         3 -> - cosInRangeA (pi * fromDyadic (1:^(-2)) - a2) res
+         4 -> - cosInRangeA a2 res
+         5 -> - sinInRangeA (pi * fromDyadic (1:^(-2)) - a2) res
+         6 -> sinInRangeA a2 res
+         7 -> cosInRangeA (pi * fromDyadic (1:^(-2)) - a2) res
+
+swapSinCos :: Int -> Approx -> Approx
+swapSinCos res a = sqrtA res $ 1 - sqrA a
+
+-- Computes sine if first argument is in the range [0,pi/4]
+sinInRangeA :: Approx -> Int -> Approx
+sinInRangeA Bottom _ = Bottom
+sinInRangeA a res =
+    let n = res `div` 2        -- need to improve this estimate (is valid from res>=80)
+        (p, q, b, t) = abpq ones
+                            ones
+                            (a:repeat (- sqrA a))
+                            (1:[2*n*(2*n+1) | n <- [1..]] :: [Approx])
+                            0
+                            n
+        nextTerm = fromDyadic (1:^(-res))
+    in boundErrorTerm $ fudge (t/(fromIntegral b*q)) nextTerm
+
+-- Computes cosine if first argument is in the range [0,pi/4]
+cosInRangeA :: Approx -> Int -> Approx
+cosInRangeA Bottom _ = Bottom
+cosInRangeA a res =
+    let n = res `div` 2        -- need to improve this estimate (is valid from res>=80)
+        (p, q, b, t) = abpq ones
+                            ones
+                            (1:repeat (- sqrA a))
+                            (1:[2*n*(2*n-1) | n <- [1..]] :: [Approx])
+                            0
+                            n
+        nextTerm = fromDyadic (1:^(-res))
+    in boundErrorTerm $ fudge (t/(fromIntegral b*q)) nextTerm
 
 -- Second argument is noice to be added to first argument.
 -- Used to allow for the error term when truncating a series.

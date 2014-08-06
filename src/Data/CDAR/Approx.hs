@@ -36,6 +36,7 @@ module Data.CDAR.Approx (Approx(..)
                         ,lnA
                         ,sinA
                         ,cosA
+                        ,piRaw
                         ,nonZeroCentred
                         ,piMachinA
                         ,piBorweinA
@@ -584,6 +585,24 @@ cosInRangeA a res =
                             n
         nextTerm = fromDyadic (1:^(-res))
     in boundErrorTerm $ fudge (t/(fromIntegral b*q)) nextTerm
+
+piRaw :: [Approx]
+piRaw = unfoldr f (1, (1, 1, 1, 13591409))
+    where as = [13591409,13591409+545140134..]
+          bs = ones
+          ps = (1:[-(6*n-5)*(2*n-1)*(6*n-1) | n <- [1,2..]])
+          qs = (1:[n^3*640320^2*26680 | n <- [1,2..]])
+          f (i, (pl, ql, bl, tl)) = 
+            let i2 = i*2
+                (pr, qr, br, tr) = abpq as bs ps qs i i2
+                n = 21+47*(i-1)
+                x = fromIntegral tl * recipA (-n) (fromIntegral (bl*ql))
+                x1 = fudge x $ fromDyadic (1:^(-n))
+                x2 = boundErrorTerm $ sqrtA (-n) 1823176476672000 * recipA (-n) x1
+            in Just ( x2
+                    , (i2, (pl * pr, ql * qr, bl * br, fromIntegral br * qr * tl + fromIntegral bl * pl * tr))
+                    )
+
 
 -- Second argument is noice to be added to first argument.
 -- Used to allow for the error term when truncating a series.

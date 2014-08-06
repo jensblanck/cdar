@@ -113,6 +113,9 @@ piMachinBR = piMachinA . negate <$> resources
 piBorweinBR :: BR Approx
 piBorweinBR = piBorweinA . negate <$> resources
 
+piBinSplitBR :: BR Approx
+piBinSplitBR = limitAndBound <$> resources <*> (require <$> resources <*> BR (repeat (BR piRaw)))
+
 ln2 :: BR Approx
 ln2 = ln2A . negate <$> resources
 
@@ -142,7 +145,7 @@ sinBR = sinRangeReduction2 . sinRangeReduction
 
 instance Floating (BR Approx) where
     sqrt = sqrtBR
-    pi = piBorweinBR
+    pi = piBinSplitBR
     exp x = expA <$> x <*> resources
     log x = agmLnA <$> fmap negate resources <*> x
     sin = sinBR

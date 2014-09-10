@@ -45,19 +45,19 @@ module Data.CDAR.Approx (Approx(..)
                         ,agmLnA
                         ,agmLn) where
 
-import Data.Ratio
-import Data.Bits
-import Data.CDAR.Dyadic hiding (normalise)
+import           Control.Applicative
+import           Control.DeepSeq
+import           Control.Exception
+import           Control.Parallel.Strategies
+import           Data.Bits
+import           Data.CDAR.Dyadic hiding (normalise)
+import           Data.CDAR.Extended
+import           Data.CDAR.IntegerLog
 import qualified Data.CDAR.Interval as Interval
-import Data.CDAR.Extended
-import Data.CDAR.IntegerLog
-import Data.CDAR.POrd
-import Data.List (unfoldr, zipWith4)
-import Data.Char (intToDigit)
-import Control.Applicative
-import Control.Exception
-import Control.DeepSeq
-import Control.Parallel.Strategies
+import           Data.CDAR.POrd
+import           Data.Char (intToDigit)
+import           Data.List (unfoldr, zipWith4)
+import           Data.Ratio
 
 type EDI = Interval.Interval (Extended Dyadic)
 
@@ -124,8 +124,8 @@ showExactA base b i f =
                   else Just (intToDigit (fromIntegral q), r)
         fp = unfoldr h f
     in (if null ip then "0" else ip)
-           ++ (if null fp then "" else ".")
-           ++ fp
+       ++ (if null fp then "" else ".")
+       ++ fp
 
 showNearZeroA :: Int -> Integer -> Integer -> Integer -> String
 showNearZeroA base b i f =

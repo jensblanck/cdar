@@ -1,4 +1,3 @@
-{-# LANGUAGE GADTs #-}
 module Data.CDAR.CR (module Data.CDAR.CR) where
 
 --import Control.Applicative
@@ -61,7 +60,7 @@ instance Fractional CR where
     fromRational x = CRRational x
 
 instance Ord CR where
-    _ < _ = False
+    compare = undefined
 
 instance Real CR where
     toRational = toRational . evalCR 40

@@ -54,7 +54,7 @@ instance Fractional (BR Approx) where
     fromRational x = toApprox <$> resources <*> pure x
 
 instance (Ord a) => Ord (BR a) where
-    _ < _ = False
+    compare = undefined
 
 instance Real (BR Approx) where
     toRational = toRational . require 40

@@ -1,12 +1,12 @@
 {-# LANGUAGE BangPatterns,GADTs,TypeSynonymInstances,FlexibleInstances #-}
 module Data.CDAR.BR where
 
-import Control.Applicative
+import           Control.Applicative
 import qualified Data.CDAR.Approx as A
-import Data.CDAR.Approx hiding (toDouble,approximatedBy)
-import Data.CDAR.IntegerLog
-import Data.CDAR.POrd
-import Data.List
+import           Data.CDAR.Approx hiding (toDouble,approximatedBy)
+import           Data.CDAR.IntegerLog
+import           Data.CDAR.POrd
+import           Data.List
 --import Data.Monoid
 
 -- The data type of reals as ZipLists of Approx.

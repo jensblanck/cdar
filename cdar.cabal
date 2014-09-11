@@ -16,32 +16,86 @@ extra-source-files:  README.md
 cabal-version:       >=1.10
 
 library
-  exposed-modules:     SinBorwein, Logistic, Time, Data.CDAR, Data.CDAR.BR, Data.CDAR.CR, Data.CDAR.Extended, Data.CDAR.POrd, Data.CDAR.Approx, Data.CDAR.Dyadic, Data.CDAR.Interval, Data.CDAR.IntegerLog
+  exposed-modules:
+      Data.CDAR
+    , Data.CDAR.BR
+    , Data.CDAR.CR
+    , Data.CDAR.Extended
+    , Data.CDAR.POrd
+    , Data.CDAR.Approx
+    , Data.CDAR.Dyadic
+    , Data.CDAR.Interval
+    , Data.CDAR.IntegerLog
   -- other-modules:       
   other-extensions:    BangPatterns, GADTs, TypeSynonymInstances, FlexibleInstances, DeriveFunctor, MagicHash
-  build-depends:       base >=4.7 && <4.8, containers >=0.5 && <0.6, deepseq >=1.3 && <1.4, integer-gmp >=0.5 && <0.6, QuickCheck >=2.6 && <2.8, parallel >=3.2 && <3.3
+  build-depends:
+      base >=4.7 && <4.8
+    , containers >=0.5 && <0.6
+    , deepseq >=1.3 && <1.4
+    , integer-gmp >=0.5 && <0.6
+    , QuickCheck >=2.6 && <2.8
+    , parallel >=3.2 && <3.3
   hs-source-dirs:      src
-  hs-source-dirs:      examples
   default-language:    Haskell2010
 
 test-suite test
   type:			exitcode-stdio-1.0
   main-is:		Test.hs
-  build-depends:	base >=4.7 && <4.8, containers >=0.5 && <0.6, deepseq >=1.3 && <1.4, integer-gmp >=0.5 && <0.6, QuickCheck >=2.6 && <2.8, smallcheck >= 1.1 && < 1.2, tasty-hunit >= 0.8 && < 0.9, tasty-quickcheck >= 0.8 && < 0.9, tasty-smallcheck >= 0.8 && < 0.9, tasty >= 0.8 && < 0.9, cdar >= 0.1, parallel >=3.2 && <3.3
+  build-depends:
+      base >=4.7 && <4.8
+    , containers >=0.5 && <0.6
+    , deepseq >=1.3 && <1.4
+    , integer-gmp >=0.5 && <0.6
+    , QuickCheck >=2.6 && <2.8
+    , smallcheck >= 1.1 && < 1.2
+    , tasty-hunit >= 0.8 && < 0.9
+    , tasty-quickcheck >= 0.8 && < 0.9
+    , tasty-smallcheck >= 0.8 && < 0.9
+    , tasty >= 0.8 && < 0.9
+    , cdar >= 0.1
+    , parallel >=3.2 && <3.3
   hs-source-dirs:	test
   default-language:	Haskell2010
 
 Benchmark bench-transcend
   type:                 exitcode-stdio-1.0
   main-is:              bench-transcend.hs
-  build-depends:        base >=4.7 && <4.8, containers >=0.5 && <0.6, deepseq >=1.3 && <1.4, integer-gmp >=0.5 && <0.6, cdar >= 0.1, criterion >= 0.8 && <0.9, parallel >=3.2 && <3.3
+  build-depends:
+      base >=4.7 && <4.8
+    , containers >=0.5 && <0.6
+    , deepseq >=1.3 && <1.4
+    , integer-gmp >=0.5 && <0.6
+    , cdar >= 0.1
+    , criterion >= 1 && <1.1
+    , parallel >=3.2 && <3.3
   hs-source-dirs:       bench
   default-language:	Haskell2010
 
 Benchmark bench
   type:                 exitcode-stdio-1.0
   main-is:              bench.hs
-  build-depends:        base >=4.7 && <4.8, containers >=0.5 && <0.6, deepseq >=1.3 && <1.4, integer-gmp >=0.5 && <0.6, cdar >= 0.1, criterion >= 0.8 && <0.9, parallel >=3.2 && <3.3
+  build-depends:
+      base >=4.7 && <4.8
+    , containers >=0.5 && <0.6
+    , deepseq >=1.3 && <1.4
+    , integer-gmp >=0.5 && <0.6
+    , cdar >= 0.1
+    , criterion >= 1 && <1.1
+    , parallel >=3.2 && <3.3
   hs-source-dirs:       bench
   default-language:	Haskell2010
 
+Executable examples
+  hs-source-dirs:      examples
+  main-is:             Main.hs
+  build-depends:
+      base >= 4 && < 5
+    , containers >= 0.5 && < 0.6
+    , deepseq >=1.3 && <1.4
+    , integer-gmp >=0.5 && <0.6
+    , cdar >= 0.1
+    , criterion >= 1 && <1.1
+    , parallel >=3.2 && <3.3
+  default-language:	Haskell2010
+
+--SinBorwein, Logistic, Time, 

@@ -1,3 +1,4 @@
+{-# LANGUAGE GADTs #-}
 module Data.CDAR.CR (module Data.CDAR.CR) where
 
 --import Control.Applicative

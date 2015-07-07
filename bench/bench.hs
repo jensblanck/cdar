@@ -1,5 +1,4 @@
 import Criterion.Main
-import Criterion.Config
 
 import Data.Bits
 import Data.Ratio

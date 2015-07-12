@@ -64,8 +64,8 @@ type EDI = Interval.Interval (Extended Dyadic)
 -- Centred dyadic approximations
 
 data Approx = Approx Integer Integer Int
-	    | Bottom
-	      deriving (Read,Show)
+            | Bottom
+              deriving (Read,Show)
 
 instance NFData Approx where
     rnf Bottom = ()
@@ -213,16 +213,16 @@ r `approximatedBy` d =
 
 better :: Approx -> Approx -> Bool
 d `better` e = lowerBound d >= lowerBound e &&
-	       upperBound d <= upperBound e
+               upperBound d <= upperBound e
 
 fromDyadic :: Dyadic -> Approx
 fromDyadic (m:^s) = Approx m 0 s
 
 instance Eq Approx where
     (Approx m e s) == (Approx n f t)
-	| s >= t = let k = s-t
+        | s >= t = let k = s-t
                    in unsafeShiftL m k == n && unsafeShiftL e k == f
-	| s <  t = let k = t-s
+        | s <  t = let k = t-s
                    in m == unsafeShiftL n k && e == unsafeShiftL f k
     Bottom == Bottom = True
     _ == _ = False
@@ -234,23 +234,23 @@ instance Enum Approx where
 
 instance Num Approx where
     (Approx m e s) + (Approx n f t)
-	| s >= t = let k = s-t
+        | s >= t = let k = s-t
                    in Approx (unsafeShiftL m k + n) (unsafeShiftL e k + f) t
-	| s <  t = let k = t-s
+        | s <  t = let k = t-s
                    in Approx (m + unsafeShiftL n k) (e + unsafeShiftL f k) s
     _ + _ = Bottom
     (Approx m e s) * (Approx n f t)
-        | am >= e && an >= f && a > 0		= Approx (a+d) (ab+ac) u
-        | am >= e && an >= f && a < 0		= Approx (a-d) (ab+ac) u
-        | am < e && n >= f			= Approx (a+b) (ac+d) u
-        | am < e && -n >= f			= Approx (a-b) (ac+d) u
-        | m >= e && an < f			= Approx (a+c) (ab+d) u
-        | -m >= e && an < f			= Approx (a-c) (ab+d) u
-        | a == 0				= Approx (0) (ab+ac+d) u
-        | am < e && an < f && a > 0 && ab > ac	= Approx (a+ac) (ab+d) u
-        | am < e && an < f && a > 0 && ab <= ac	= Approx (a+ab) (ac+d) u
-        | am < e && an < f && a < 0 && ab > ac	= Approx (a-ac) (ab+d) u
-        | am < e && an < f && a < 0 && ab <= ac	= Approx (a-ab) (ac+d) u
+        | am >= e && an >= f && a > 0           = Approx (a+d) (ab+ac) u
+        | am >= e && an >= f && a < 0           = Approx (a-d) (ab+ac) u
+        | am < e && n >= f                      = Approx (a+b) (ac+d) u
+        | am < e && -n >= f                     = Approx (a-b) (ac+d) u
+        | m >= e && an < f                      = Approx (a+c) (ab+d) u
+        | -m >= e && an < f                     = Approx (a-c) (ab+d) u
+        | a == 0                                = Approx (0) (ab+ac+d) u
+        | am < e && an < f && a > 0 && ab > ac  = Approx (a+ac) (ab+d) u
+        | am < e && an < f && a > 0 && ab <= ac = Approx (a+ab) (ac+d) u
+        | am < e && an < f && a < 0 && ab > ac  = Approx (a-ac) (ab+d) u
+        | am < e && an < f && a < 0 && ab <= ac = Approx (a-ab) (ac+d) u
       where am = (abs m)
             an = (abs n)
             a = m*n
@@ -270,9 +270,9 @@ instance Num Approx where
       where m' = abs m
     abs Bottom = Bottom
     signum (Approx m e _)
-	| e == 0 = Approx (signum m) 0 0
-	| abs m < e = Approx 0 1 0
-	| abs m == e = Approx (signum m) 1 (-1)
+        | e == 0 = Approx (signum m) 0 0
+        | abs m < e = Approx 0 1 0
+        | abs m == e = Approx (signum m) 1 (-1)
         | otherwise = Approx (signum m) 0 0
     signum Bottom = Approx 0 1 0
     fromInteger i = Approx i 0 0
@@ -285,12 +285,12 @@ instance Fractional Approx where
     fromRational = toApprox defaultPrecision
     recip Bottom = Bottom
     recip (Approx m e s)
-	| (abs m) > e =	let d = m*m-e*e
-			    t = 2 * (integerLog2 m + errorBits)
-			  in Approx
-				 (round (unsafeShiftL m t%(d)))
-				 (ceiling (1%2 + unsafeShiftL e t%(d)))
-				 (-s-t)
+        | (abs m) > e = let d = m*m-e*e
+                            t = 2 * (integerLog2 m + errorBits)
+                          in Approx
+                                 (round (unsafeShiftL m t%(d)))
+                                 (ceiling (1%2 + unsafeShiftL e t%(d)))
+                                 (-s-t)
         | otherwise   = Bottom
 
 recipA :: Int -> Approx -> Approx
@@ -302,11 +302,11 @@ recipA t (Approx m e s)
                            1
                            s'
     | (abs m) > e = let d = m*m-e*e
-			s' = 2 * (integerLog2 m + errorBits)
-		    in boundErrorTerm $ Approx
+                        s' = 2 * (integerLog2 m + errorBits)
+                    in boundErrorTerm $ Approx
                            (round (unsafeShiftL m s'%(d)))
                            (ceiling (1%2 + unsafeShiftL e s'%(d)))
-			   (-s-s')
+                           (-s-s')
     | otherwise   = Bottom
 
 recipDyadic :: Dyadic -> Int -> Approx
@@ -332,7 +332,7 @@ divModA _ _ = (Bottom, Bottom)
 -- |Not a proper Ord type as Approx are intervals
 instance Ord Approx where
     compare (Approx m e s) (Approx n f t)
-	| abs ((m:^s)-(n:^t)) > (e:^s)+(f:^t) = compare (m:^s) (n:^t)
+        | abs ((m:^s)-(n:^t)) > (e:^s)+(f:^t) = compare (m:^s) (n:^t)
         | otherwise                           = undefined
     compare _ _ = undefined
 
@@ -348,8 +348,8 @@ instance PartialOrd Approx where
 
 instance Real Approx where
     toRational (Approx m e s) = approxRational
-				  (toRational (m:^s))
-				  (toRational (e:^s))
+                                  (toRational (m:^s))
+                                  (toRational (e:^s))
     toRational _ = undefined
 
 toDouble :: Approx -> Double
@@ -378,7 +378,7 @@ boundErrorTerm a@(Approx m e s)
     | otherwise =
         let k = integerLog2 e + 1 - errorBits
             t = testBit m (k-1)
-	    m' = unsafeShiftR m k
+            m' = unsafeShiftR m k
             -- may overflow and use errorBits+1
             e' = unsafeShiftR (e + bit (k-1)) k + 1 
         in if t
@@ -389,16 +389,16 @@ limitSize :: Int -> Approx -> Approx
 limitSize _ Bottom = Bottom
 limitSize l a@(Approx m e s)
     | k > 0     = Approx
-		  ((if testBit m (k-1) then (+1) else id) (unsafeShiftR m k))
-		  (1 + (unsafeShiftR (e + bit (k-1)) k))
-		  (-l)
+                  ((if testBit m (k-1) then (+1) else id) (unsafeShiftR m k))
+                  (1 + (unsafeShiftR (e + bit (k-1)) k))
+                  (-l)
     | otherwise = a
     where k = (-s)-l
 
 checkPrecisionLeft :: Approx -> Approx
 checkPrecisionLeft a
-	| precision a > pure defaultPrecision = a
-	| otherwise = throw $ LossOfPrecision
+        | precision a > pure defaultPrecision = a
+        | otherwise = throw $ LossOfPrecision
 
 limitAndBound :: Int -> Approx -> Approx
 limitAndBound limit =

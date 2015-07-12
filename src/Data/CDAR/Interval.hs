@@ -36,11 +36,11 @@ exact d = upperBound d == lowerBound d
 
 approximatedBy :: (Real a) => a -> Interval a -> Bool
 r `approximatedBy` d = toRational (lowerBound d) <= toRational r &&
-		       toRational r <= toRational (upperBound d)
+                       toRational r <= toRational (upperBound d)
 
 better :: Ord a => Interval a -> Interval a -> Bool
 d `better` e = lowerBound d >= lowerBound e &&
-	       upperBound d <= upperBound e
+               upperBound d <= upperBound e
 
 instance (Num a, Ord a) => Num (Interval a) where
     (Interval l u) + (Interval l' u') = Interval (l+l') (u+u')
@@ -49,13 +49,13 @@ instance (Num a, Ord a) => Num (Interval a) where
            in Interval (minimum t) (maximum t)     -- better algorithms exist
     negate (Interval l u) = Interval (negate u)  (negate l)
     abs i@(Interval l u)
-	| (signum l) /= -1 = i
-	| (signum u) /= 1  = negate i
-	| otherwise        = Interval 0 (negate l `max` u)
+        | (signum l) /= -1 = i
+        | (signum u) /= 1  = negate i
+        | otherwise        = Interval 0 (negate l `max` u)
     signum (Interval l u)
-	| (signum l) == 1  = 1
-	| (signum u) == -1 = -1
-	| otherwise        = error "signum not defined, interval spans 0"
+        | (signum l) == 1  = 1
+        | (signum u) == -1 = -1
+        | otherwise        = error "signum not defined, interval spans 0"
     fromInteger i = let d = fromInteger i in Interval d d
 
 instance Ord a => IntervalOrd (Interval a) where

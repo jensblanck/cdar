@@ -17,11 +17,11 @@ data Dyadic = Integer :^ Int deriving (Read,Show)
 
 instance Eq Dyadic where
     a :^ s == b :^ t | s <= t    = a == unsafeShiftL b (t-s)
-		     | otherwise = unsafeShiftL a (s-t) == b
+                     | otherwise = unsafeShiftL a (s-t) == b
 
 instance Ord Dyadic where
     compare (a :^ s) (b :^ t) | s <= t    = compare a (unsafeShiftL b (t-s))
-			      | otherwise = compare (unsafeShiftL a (s-t)) b
+                              | otherwise = compare (unsafeShiftL a (s-t)) b
 
 -- |Normalises a dyadic number a :^ s by dividing out factors of 2 from a and
 -- adjusting the exponent accordingly.
@@ -33,8 +33,8 @@ normalise d@(a :^ s)
 
 instance Num Dyadic where
     a :^ s + b :^ t 
-	| s <= t    = (a + unsafeShiftL b (t-s)) :^ s
-	| otherwise = (unsafeShiftL a (s-t) + b) :^ t
+        | s <= t    = (a + unsafeShiftL b (t-s)) :^ s
+        | otherwise = (unsafeShiftL a (s-t) + b) :^ t
     a :^ s * b :^ t = (a * b) :^ (s+t)
     negate (a :^ s) = (negate a) :^ s
     abs (a :^ s) = (abs a) :^ s

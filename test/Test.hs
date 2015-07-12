@@ -33,8 +33,8 @@ instance (Monad m) => Serial m Dyadic
 
 instance Arbitrary Dyadic where
     arbitrary = do a <- arbitrary
-		   s <- choose (-1000,100)
-		   return (a :^ s)
+                   s <- choose (-1000,100)
+                   return (a :^ s)
 
 propertiesD :: TestTree
 propertiesD = testGroup "Properties of Dyadic" [scPropD, qcPropD]
@@ -133,12 +133,12 @@ scPropA = testGroup "(checked by smallcheck)"
   , SC.testProperty "boundErrorTerm" $
     \a -> case a of
             Approx _ _ _ -> let b@(Approx _ e _) = boundErrorTerm a
-		            in (a `better` b) && (e < errorBound)
+                            in (a `better` b) && (e < errorBound)
             Bottom       -> better a (boundErrorTerm a)
   , SC.testProperty "limitSize" $
     \a -> case a of
             Approx _ _ _ -> let b@(Approx _ _ s) = limitSize 2 a
-		            in (a `better` b) && (s >= -2)
+                            in (a `better` b) && (s >= -2)
             Bottom       -> better a (limitSize 2 a)
   , SC.testProperty "sqrt" $ \a -> let b = abs a in better b $ (sqrtA 0 b)^2
   ]
@@ -154,11 +154,11 @@ qcPropA = testGroup "(checked by smallcheck)"
   , QC.testProperty "abs negate sign" $ \a -> approximatedBy 0 $ (a ::Approx) + (negate (signum a) * (abs a))
   , QC.testProperty "addition precision" $ \a b -> 
       collect (precision (boundErrorTerm (a+b)) - (precision a `min` precision b))
-	      True
+              True
 {-
   , QC.testProperty "multiplication precision" $ \a b -> 
       collect (precision (boundErrorTerm (a*b)) - (precision a `min` precision b))
-	      True
+              True
 -}
   , QC.testProperty "a+(-a) contains 0" $ \a -> 0 `approximatedBy` ((a :: Approx) + negate a)
   , QC.testProperty "toApprox r contains r" $ \r -> approximatedBy r $ toApprox 20 (r :: Rational)
@@ -168,12 +168,12 @@ qcPropA = testGroup "(checked by smallcheck)"
   , QC.testProperty "boundErrorTerm" $
     \a -> case a of 
             Approx _ _ _ -> let b@(Approx _ e _) = boundErrorTerm a
-		            in (a `better` b) && (e < errorBound)
+                            in (a `better` b) && (e < errorBound)
             Bottom       -> better a (boundErrorTerm a)
   , QC.testProperty "limitSize" $
     \a -> case a of 
             Approx _ _ _ -> let b@(Approx _ _ s) = limitSize 2 a
-		            in (a `better` b) && (s >= -2)
+                            in (a `better` b) && (s >= -2)
             Bottom       -> better a (limitSize 2 a)
   , QC.testProperty "sqrt" $ \a -> let b = abs a in better b $ (sqrtA 0 b)^2
   ]

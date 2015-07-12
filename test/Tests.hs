@@ -20,8 +20,8 @@ longArgs = stdArgs {maxSuccess=500}
 
 instance Arbitrary Dyadic where
     arbitrary = do a <- arbitrary
-		   s <- choose (-1000,100)
-		   return (a :^ s)
+                   s <- choose (-1000,100)
+                   return (a :^ s)
 --    coarbitrary (a :^ _) = variant (fromInteger a `mod` 4)
 
 prop_Ord :: Dyadic -> Dyadic -> Bool
@@ -95,12 +95,12 @@ prop_absnegsignA a = approximatedBy 0 $ a + (negate (signum a) * (abs a))
 prop_Add_precision :: Approx -> Approx -> Property
 prop_Add_precision a b =
     collect (precision (boundErrorTerm (a+b)) - (precision a `min` precision b))
-	    True
+            True
 
 prop_Mul_significance :: Approx -> Approx -> Property
 prop_Mul_significance a b =
     collect (significance (boundErrorTerm (a*b)) -
-	     (significance a `min` significance b)) True
+             (significance a `min` significance b)) True
 
 prop_negA :: Approx -> Bool
 prop_negA a = 0 `approximatedBy` (a + negate a)
@@ -117,7 +117,7 @@ prop_recMul a = not (0 `approximatedBy` a) ==> 1 `approximatedBy` (a*(1/a))
 
 prop_errorBound :: Approx -> Bool
 prop_errorBound a@(Approx _ _ _) = let b@(Approx _ e _) = boundErrorTerm a
-		                   in (a `better` b) && (e < errorBound)
+                                   in (a `better` b) && (e < errorBound)
 prop_errorBound a@Bottom = better a $ boundErrorTerm a
 
 prop_errorBound' :: Approx -> Property
@@ -126,7 +126,7 @@ prop_errorBound' a = collect (a, b) ((a `better` b) && (e < errorBound))
 
 prop_limitSize :: Approx -> Bool
 prop_limitSize a@(Approx _ _ _) = let b@(Approx _ _ s) = limitSize 2 a
-		                  in (a `better` b) && (s >= -2)
+                                  in (a `better` b) && (s >= -2)
 prop_limitSize a@Bottom = better a $ limitSize 2 a
 
 prop_sqrtA :: Approx -> Bool

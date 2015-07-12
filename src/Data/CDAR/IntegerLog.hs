@@ -36,7 +36,7 @@ integerLog2'' i l h =
        l
     else
        if i < bit m then
-	  integerLog2'' i l m
+          integerLog2'' i l m
        else
           integerLog2'' i m h
     where m = (l+h) `div` 2

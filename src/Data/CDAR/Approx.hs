@@ -484,6 +484,9 @@ ones = repeat 1
 sqrA :: Approx -> Approx
 sqrA (Approx m e s) = Approx (m^2 + e^2) (2*abs m*e) (2*s)
 
+{- Using standard Taylor expansion after range reduction.
+-}
+
 expA :: Approx -> Int -> Approx
 expA Bottom _ = undefined --Bottom
 expA a@(Approx m e s) res =
@@ -503,23 +506,30 @@ expA a@(Approx m e s) res =
         ss = iterate (boundErrorTerm . sqrA) $ fudge (t/(fromIntegral b*q)) nextTerm
     in ss !! r
 
+{- Using ln x = atanh ((x-1)/(x+1)) after range reduction.
+-}
+
 lnA :: Approx -> Int -> Approx
 lnA Bottom _ = Bottom
 lnA a@(Approx m e s) res =
     if m <= e then Bottom -- only defined for strictly positive arguments
     else
-        let m' = m - bit (-s)
-            a' = Approx m' e s
-            r = max 0 (s + 2 + integerLog2 m')
-            Finite n = min (significance a') (Finite res)
-            (p, q, b, t) = abpq ones
-                                [1..]
-                                (a':repeat (-a'))
-                                (repeat 1 :: [Approx])
+        let r = s + integerLog2 (3*m) - 1
+            a' = Approx m e (s-r)
+            u = a' - 1
+            v = a' + 1
+            u2 = sqrA u
+            v2 = sqrA v
+            Finite res' = min (significance a) (Finite res)
+            n = ceiling . (/2) $ fromIntegral (-res')/(log 0.2/log 2) - 1
+            (p, q, b, t) = abpq (repeat 2)
+                                [1,3..]
+                                (u:repeat u2)
+                                (v:repeat v2)
                                 0
                                 n
-            nextTerm = a' * abs p
-        in boundErrorTerm $ fudge (t/(fromIntegral b*q) + fromIntegral r * ln2A res) nextTerm
+            nextTerm = recipA (-res') 5 ^^ (2*n+1)
+        in boundErrorTerm $ fudge (t/(fromIntegral b*q) + fromIntegral r * ln2A (-res)) nextTerm
 
 sinA :: Approx -> Int -> Approx
 sinA Bottom _ = Bottom
@@ -554,6 +564,23 @@ cosA a res =
          5 -> - sinInRangeA (pi * fromDyadic (1:^(-2)) - a2) res
          6 -> sinInRangeA a2 res
          7 -> cosInRangeA (pi * fromDyadic (1:^(-2)) - a2) res
+
+atanA :: Approx -> Int -> Approx
+atanA Bottom _ = Bottom
+atanA a@(Approx m e s) res =
+  let rr x = x * recipA (-res) (1 + sqrtA (-res) (1 + sqrA x))
+      a' = rr . rr . rr $ a -- range reduction so that |a'| < 1/4
+      a2 = - sqrA a'
+      Finite res' = min (significance a) (Finite res)
+      n = (res' + 1) `div` 2
+      (p, q, b, t) = abpq ones
+                          [1,3..]
+                          (a':repeat a2)
+                          (repeat 1)
+                          0
+                          n
+      nextTerm = Approx 1 0 (-2*n)
+  in boundErrorTerm . (8*) $ fudge (t/(fromIntegral b*q)) nextTerm
 
 swapSinCos :: Int -> Approx -> Approx
 swapSinCos res a = sqrtA res $ 1 - sqrA a

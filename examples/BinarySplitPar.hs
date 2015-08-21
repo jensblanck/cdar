@@ -6,7 +6,7 @@ import Data.Ratio
 
 import Data.CDAR
 
-divConq :: (a -> b)
+{-divConq :: (a -> b)
         -> a
         -> (a -> Bool)
         -> (b -> b -> b)
@@ -17,13 +17,15 @@ divConq f arg threshold conquer divide = go arg
       go arg = 
           case divide arg of
             Nothing -> f arg
-            Just (l0,r0) -> conquer l1 r1 `using` strat
-                where
-                  l1 = go l0
-                  r1 = go r0
-                  strat x = do r l1; r r1; return x
-                      where r | threshold arg = rseq
-                              | otherwise     = rpar
+            Just (l0,r0) -> runPar $ do
+                            i <- new
+                            j <- new
+                            fork (put i (go l0))
+                            fork (put j (go r0))
+                            a <- get i
+                            b <- get j
+                            return (conquer a b)
+-}
 
 pqCombine :: (Integer, Integer) -> (Integer, Integer) -> (Integer, Integer)
 pqCombine (pl, ql) (pr, qr) = (pl*qr+pr, ql*qr)
@@ -44,35 +46,17 @@ fudge (Approx m e s) (Approx m' e' s') =
 
 {-
 euler n =
-    let t = n `div` 16
-        pqs = parMap rpar pq $ zip [0,t..15*t] [t,2*t..16*t]
-        [(p,q)] = contract . contract . contract . contract $ pqs
-        a = (fromIntegral p :: Approx) / fromIntegral q
---        e = (1 :: Approx) / fromIntegral (q*(n+1))
-    in boundErrorTerm $ a --fudge a e
--}
-
-pairUp :: [a] -> [(a,a)]
-pairUp [] = []
-pairUp [a] = undefined
-pairUp (a:b:as) = (a,b):pairUp as
-
-contract :: [(Integer, Integer)] -> [(Integer, Integer)]
-contract as = map {-parMap rpar-} (\(a,b) -> pqCombine a b) (pairUp as) --`using` evalList rpar
-
---{-
-euler n =
     let (p,q) = divConq pq
                         (0,n)
-                        (\(a,b) -> b-a < 100000)
+                        (\(a,b) -> b-a < 160000)
                         pqCombine
-                        (\(a,b) -> if b-a > 5000
+                        (\(a,b) -> if b-a > 160000
                                    then let m = (a+b+1) `div` 2 in Just ((a,m), (m, b))
                                    else Nothing)
         a = (fromIntegral p :: Approx) / fromIntegral q
         e = (1 :: Approx) / fromIntegral (q*(n+1))
     in boundErrorTerm $ a --fudge a e
--- -}
+-}
 
 pqToApprox :: (Integer,Integer) -> Approx
 pqToApprox (p,q) =
@@ -80,15 +64,15 @@ pqToApprox (p,q) =
 --      e = (1 :: Approx) / fromIntegral (q*(n+1))
   in boundErrorTerm a
 
-main = print $ euler 300000 `seq` ()
+main = print . flip seq () . pqToApprox . runPar $ do
+  i <- new
+  j <- new
+  fork (put i (pq (0,150000)))
+  fork (put j (pq (150000,300000)))
+  a <- get i
+  b <- get j
+  return (pqCombine a b)
 
-test = pqToApprox $ divConq pq --(\(a,b) -> product [a..b-1])
-                       (0,300000)
-                       (\(a,b) -> b-a < 10000)
-                       pqCombine
-                       (\(a,b) -> if b-a > 1000
-                                  then let m = (a+b) `div` 2 in Just ((a,m),(m,b))
-                                  else Nothing)
 
 ----
 

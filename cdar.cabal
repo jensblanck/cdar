@@ -39,8 +39,8 @@ library
   default-language:    Haskell2010
 
 test-suite test
-  type:			exitcode-stdio-1.0
-  main-is:		Test.hs
+  type:      exitcode-stdio-1.0
+  main-is:    Test.hs
   build-depends:
       base >=4.7 && <4.9
     , containers >=0.5 && <0.6
@@ -54,8 +54,8 @@ test-suite test
     , tasty >= 0.8 && < 0.11
     , cdar >= 0.1
     , parallel >=3.2 && <3.3
-  hs-source-dirs:	test
-  default-language:	Haskell2010
+  hs-source-dirs: test
+  default-language: Haskell2010
 
 Benchmark bench-transcend
   type:                 exitcode-stdio-1.0
@@ -69,7 +69,7 @@ Benchmark bench-transcend
     , criterion >= 1.1 && <1.2
     , parallel >=3.2 && <3.3
   hs-source-dirs:       bench
-  default-language:	Haskell2010
+  default-language: Haskell2010
 
 Benchmark bench
   type:                 exitcode-stdio-1.0
@@ -83,19 +83,20 @@ Benchmark bench
     , criterion >= 1.1 && <1.2
     , parallel >=3.2 && <3.3
   hs-source-dirs:       bench
-  default-language:	Haskell2010
+  default-language: Haskell2010
 
 Executable examples
   hs-source-dirs:      examples
   main-is:             Main.hs
   build-depends:
       base >= 4 && < 5
+    , cdar >= 0.1
     , containers >= 0.5 && < 0.6
     , deepseq >=1.3 && <1.5
     , integer-gmp >=0.5 && <1.1
     , cdar >= 0.1
     , criterion >= 1.1 && <1.2
     , parallel >=3.2 && <3.3
-  default-language:	Haskell2010
+  default-language: Haskell2010
 
 --SinBorwein, Logistic, Time, 

@@ -46,11 +46,7 @@ instance Num (BR Approx) where
     fromInteger n = pure (Approx n 0 0)
 
 instance Fractional (BR Approx) where
-    recip x = f <$> x <*> resources
-        where f a l = ok 10 $ limitAndBound l (g a l)
-              g a l = if exact a
-                      then recipDyadic (centre a) l
-                      else recip a
+    recip x = recipA <$> resources <*> x
     fromRational x = toApprox <$> resources <*> pure x
 
 instance (Ord a) => Ord (BR a) where
@@ -58,6 +54,9 @@ instance (Ord a) => Ord (BR a) where
 
 instance Real (BR Approx) where
     toRational = toRational . require 40
+
+showBRn :: Int -> BR Approx -> String
+showBRn n = concat . intersperse "\n" . map showA . take n . getBR
 
 ok :: Int -> Approx -> Approx
 ok d a = if precision a > fromIntegral d then a else Bottom
@@ -151,7 +150,7 @@ instance Floating (BR Approx) where
     sin = sinBR
     cos = sin . (halfPi +)
     asin = undefined
-    atan = undefined
+    atan x = atanA <$> x <*> resources
     acos = undefined
     sinh = undefined
     cosh = undefined

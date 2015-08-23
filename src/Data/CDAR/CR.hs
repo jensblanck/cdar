@@ -94,9 +94,7 @@ eval t l (CRSignum x) = signum $ eval t l x
 eval t l (CRRecip x) =
     limitAndBound l . ok 3 $
     let a = eval t l x
-    in if exact a
-       then recipDyadic (centre a) l
-       else recip a
+    in recipA l a
 eval t _ (CRVar x) = maybe Bottom id $ M.lookup x t
 eval t l (CRLet s x y) = let z = eval t l x
                              t' = M.insert s z t

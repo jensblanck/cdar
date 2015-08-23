@@ -1,6 +1,7 @@
 module Data.CDAR.Approx (Approx(..)
                         ,errorBits
                         ,errorBound
+                        ,defaultPrecision
                         ,showA
                         ,showInBaseA
                         ,toEDI
@@ -15,7 +16,6 @@ module Data.CDAR.Approx (Approx(..)
                         ,fromDyadic
                         ,toApprox
                         ,recipA
-                        ,recipDyadic
                         ,modA
                         ,divModA
                         ,toDouble
@@ -36,6 +36,7 @@ module Data.CDAR.Approx (Approx(..)
                         ,lnA
                         ,sinA
                         ,cosA
+                        ,atanA
                         ,piRaw
                         ,nonZeroCentred
                         ,piMachinA
@@ -60,6 +61,7 @@ import           Data.List (unfoldr, zipWith4)
 import           Data.Ratio
 
 type EDI = Interval.Interval (Extended Dyadic)
+type Precision = Int    -- Precition measures how many bits after the binary point.
 
 -- Centred dyadic approximations
 
@@ -82,7 +84,7 @@ errorBound = 2^errorBits
 
 -- |The default cutoff for diverging computations. May well be chosen much
 -- smaller. 31 corresponds to about 10 decimal places.
-defaultPrecision :: Int
+defaultPrecision :: Precision
 defaultPrecision = 31
 
 showA :: Approx -> String
@@ -277,30 +279,22 @@ instance Num Approx where
     signum Bottom = Approx 0 1 0
     fromInteger i = Approx i 0 0
 
-toApprox :: Int -> Rational -> Approx
+toApprox :: Precision -> Rational -> Approx
 toApprox t r = Approx (2 * round (r*2^^t)) 1 (-t - 1)
 
 -- |Not a proper Fractional type as Approx are intervals
 instance Fractional Approx where
     fromRational = toApprox defaultPrecision
-    recip Bottom = Bottom
-    recip (Approx m e s)
-        | (abs m) > e = let d = m*m-e*e
-                            t = 2 * (integerLog2 m + errorBits)
-                          in Approx
-                                 (round (unsafeShiftL m t%(d)))
-                                 (ceiling (1%2 + unsafeShiftL e t%(d)))
-                                 (-s-t)
-        | otherwise   = Bottom
+    recip = recipA defaultPrecision
 
-recipA :: Int -> Approx -> Approx
+recipA :: Precision -> Approx -> Approx
 recipA _ Bottom = Bottom
 recipA t (Approx m e s)
-    | e == 0      = let s' = t - errorBits - 5 - integerLog2 m
-                    in boundErrorTerm $ Approx
-                           (round (unsafeShiftL 1 (-s') % m))
-                           1
-                           s'
+    | e == 0      = let s' = 2*s + t + 5 + integerLog2 (abs m)
+                    in Approx
+                         (round (bit (s'-2*s) % m))
+                         1
+                         (s-s')
     | (abs m) > e = let d = m*m-e*e
                         s' = 2 * (integerLog2 m + errorBits)
                     in boundErrorTerm $ Approx
@@ -308,10 +302,6 @@ recipA t (Approx m e s)
                            (ceiling (1%2 + unsafeShiftL e s'%(d)))
                            (-s-s')
     | otherwise   = Bottom
-
-recipDyadic :: Dyadic -> Int -> Approx
-recipDyadic (m:^s) l = Approx (round (bit t%m)) 1 (-s-t)
-    where t = l + integerLog2 (abs m) + errorBits
 
 modA :: Approx -> Approx -> Approx
 modA (Approx m e s) (Approx n f t) =
@@ -358,7 +348,7 @@ toDouble = fromRational . toRational . centre
 toDouble2 :: Approx -> Interval.Interval Double
 toDouble2 = fmap (fromRational . toRational) . toEDI
 
-precision :: Approx -> Extended Int
+precision :: Approx -> Extended Precision
 precision (Approx _ 0 _) = PosInf
 precision (Approx _ e s) = Finite $ - s - (integerLog2 e) - 1
 precision Bottom         = NegInf
@@ -385,7 +375,7 @@ boundErrorTerm a@(Approx m e s)
            then Approx (m'+1) e' (s+k)
            else Approx m'     e' (s+k)
 
-limitSize :: Int -> Approx -> Approx
+limitSize :: Precision -> Approx -> Approx
 limitSize _ Bottom = Bottom
 limitSize l a@(Approx m e s)
     | k > 0     = Approx
@@ -400,7 +390,7 @@ checkPrecisionLeft a
         | precision a > pure defaultPrecision = a
         | otherwise = throw $ LossOfPrecision
 
-limitAndBound :: Int -> Approx -> Approx
+limitAndBound :: Precision -> Approx -> Approx
 limitAndBound limit =
     limitSize limit . boundErrorTerm
 
@@ -438,7 +428,7 @@ powers (Approx m e s) =
     in zipWith g (iterate (+s) 0) $ map (sumAlt . f) binomialCoefficients
 powers _ = repeat Bottom
 
-sqrtA :: Int -> Approx -> Approx
+sqrtA :: Precision -> Approx -> Approx
 sqrtA _ Bottom = Bottom
 sqrtA k a@(Approx m e s)
     | -m > e    = error "Attempting sqrt of Approx containing only negative numbers."
@@ -487,7 +477,7 @@ sqrA (Approx m e s) = Approx (m^2 + e^2) (2*abs m*e) (2*s)
 {- Using standard Taylor expansion after range reduction.
 -}
 
-expA :: Approx -> Int -> Approx
+expA :: Approx -> Precision -> Approx
 expA Bottom _ = undefined --Bottom
 expA a@(Approx m e s) res =
     let r = max 0 (s + 2 + integerLog2 m)
@@ -509,7 +499,7 @@ expA a@(Approx m e s) res =
 {- Using ln x = atanh ((x-1)/(x+1)) after range reduction.
 -}
 
-lnA :: Approx -> Int -> Approx
+lnA :: Approx -> Precision -> Approx
 lnA Bottom _ = Bottom
 lnA a@(Approx m e s) res =
     if m <= e then Bottom -- only defined for strictly positive arguments
@@ -531,7 +521,7 @@ lnA a@(Approx m e s) res =
             nextTerm = recipA (-res') 5 ^^ (2*n+1)
         in boundErrorTerm $ fudge (t/(fromIntegral b*q) + fromIntegral r * ln2A (-res)) nextTerm
 
-sinA :: Approx -> Int -> Approx
+sinA :: Approx -> Precision -> Approx
 sinA Bottom _ = Bottom
 sinA a res =
     let pi = piBorweinA (-res)
@@ -548,7 +538,7 @@ sinA a res =
          6 -> - cosInRangeA a2 res
          7 -> - sinInRangeA (pi * fromDyadic (1:^(-2)) - a2) res
 
-cosA :: Approx -> Int -> Approx
+cosA :: Approx -> Precision -> Approx
 cosA Bottom _ = Bottom
 cosA a res =
     let pi = piBorweinA (-res)
@@ -565,7 +555,7 @@ cosA a res =
          6 -> sinInRangeA a2 res
          7 -> cosInRangeA (pi * fromDyadic (1:^(-2)) - a2) res
 
-atanA :: Approx -> Int -> Approx
+atanA :: Approx -> Precision -> Approx
 atanA Bottom _ = Bottom
 atanA a@(Approx m e s) res =
   let rr x = x * recipA (-res) (1 + sqrtA (-res) (1 + sqrA x))
@@ -582,11 +572,11 @@ atanA a@(Approx m e s) res =
       nextTerm = Approx 1 0 (-2*n)
   in boundErrorTerm . (8*) $ fudge (t/(fromIntegral b*q)) nextTerm
 
-swapSinCos :: Int -> Approx -> Approx
+swapSinCos :: Precision -> Approx -> Approx
 swapSinCos res a = sqrtA res $ 1 - sqrA a
 
 -- Computes sine if first argument is in the range [0,pi/4]
-sinInRangeA :: Approx -> Int -> Approx
+sinInRangeA :: Approx -> Precision -> Approx
 sinInRangeA Bottom _ = Bottom
 sinInRangeA a res =
     let n = res `div` 2        -- need to improve this estimate (is valid from res>=80)
@@ -600,7 +590,7 @@ sinInRangeA a res =
     in boundErrorTerm $ fudge (t/(fromIntegral b*q)) nextTerm
 
 -- Computes cosine if first argument is in the range [0,pi/4]
-cosInRangeA :: Approx -> Int -> Approx
+cosInRangeA :: Approx -> Precision -> Approx
 cosInRangeA Bottom _ = Bottom
 cosInRangeA a res =
     let n = res `div` 2        -- need to improve this estimate (is valid from res>=80)
@@ -645,10 +635,10 @@ nonZeroCentred Bottom = False
 nonZeroCentred (Approx 0 _ _) = False
 nonZeroCentred _ = True
 
-piMachinA :: Int -> Approx
+piMachinA :: Precision -> Approx
 piMachinA t = let (m:^s) = piMachinD t in Approx m 1 s
 
-piBorweinA :: Int -> Approx
+piBorweinA :: Precision -> Approx
 piBorweinA t = let (m:^s) = piBorweinD t in Approx m 1 s
 
 piAgmA t x = let t' = t - 10
@@ -669,12 +659,12 @@ piAgmA t x = let t' = t - 10
                  pi = boundErrorTerm $ unionApprox (2*(snd (last ss))*e) (2*(fst (last ss))*e)
              in pi
                 
-ln2A :: Int -> Approx
+ln2A :: Precision -> Approx
 ln2A t = let (m:^s) = ln2D t in Approx m 1 s
 
 -- AGM
 
-lnSuperSizeUnknownPi :: Int -> Approx -> (Approx,Approx)
+lnSuperSizeUnknownPi :: Precision -> Approx -> (Approx,Approx)
 lnSuperSizeUnknownPi t x =
     let t' = t - 10
         a = 1
@@ -700,7 +690,7 @@ lnSuperSizeUnknownPi t x =
         pi = boundErrorTerm $ unionApprox (2*bn*e) (2*an*e)
     in (r,pi) --[a,b,c,d,b2,b3,b4,l,u,r,e,pi]
 
-lnSuperSizeKnownPi :: Int -> Approx -> Approx -> Approx
+lnSuperSizeKnownPi :: Precision -> Approx -> Approx -> Approx
 lnSuperSizeKnownPi t pi x =
     let t' = t - 10
         a = 1
@@ -719,7 +709,7 @@ lnSuperSizeKnownPi t pi x =
         u = (i + (Approx 1 0 (-1))*b*b1sqrt) / (2 + (Approx 1 0 (-1))*b2)
     in boundErrorTerm $ unionApprox l u
 
-lnLarge :: Int -> Approx -> Approx
+lnLarge :: Precision -> Approx -> Approx
 lnLarge t x =
     let (Finite k) = min (significance x) (Finite (-t))
         pi = piBorweinA t
@@ -729,7 +719,7 @@ lnLarge t x =
         (Approx m e s) = lnSuperSizeKnownPi t pi $ x^(2^n)
     in Approx m e (s-n)
 
-lnSmall :: Int -> Approx -> Approx
+lnSmall :: Precision -> Approx -> Approx
 lnSmall t x@(Approx m _ s) =
     let (Finite t') = min (significance x) (Finite (-t))
         pi = piBorweinA t'
@@ -740,7 +730,7 @@ lnSmall t x@(Approx m _ s) =
         log2k = lnSuperSizeKnownPi (-t') pi $ 2^k
     in logx2k - log2k
 
-agmLnA :: Int -> Approx -> Approx
+agmLnA :: Precision -> Approx -> Approx
 agmLnA t x
     | significance x < pure 5     = Bottom
     | 0 `approximatedBy` x        = Bottom
@@ -754,7 +744,7 @@ unionApprox Bottom _ = Bottom
 unionApprox _ Bottom = Bottom
 unionApprox a b = fromEDI $ Interval.Interval (lowerBound a `min` lowerBound b) (upperBound a `max` upperBound b)
 
-agmA :: Int -> Approx -> Approx -> [(Approx,Approx)]
+agmA :: Precision -> Approx -> Approx -> [(Approx,Approx)]
 agmA t a b = let t' = t - 5
                  step (a,b) = (boundErrorTerm $ Approx 1 0 (-1) * (a+b), boundErrorTerm $ sqrtA t' (a*b))
                  close (a,b) = approximatedBy 0 $ a-b

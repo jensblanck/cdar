@@ -145,7 +145,7 @@ sinBR = sinRangeReduction2 . sinRangeReduction
 instance Floating (BR Approx) where
     sqrt = sqrtBR
     pi = piBinSplitBR
-    exp x = expA <$> x <*> resources
+    exp x = expA <$> resources <*> x
     log x = agmLnA <$> fmap negate resources <*> x
     sin = sinBR
     cos = sin . (halfPi +)

@@ -303,6 +303,13 @@ recipA t (Approx m e s)
                            (-s-s')
     | otherwise   = Bottom
 
+divAInteger :: Approx -> Integer -> Approx
+divAInteger (Approx m e s) n =
+  let t = integerLog2 n
+  in Approx (round (unsafeShiftL m t % n))
+             (ceiling (unsafeShiftL e t % n))
+             s
+
 modA :: Approx -> Approx -> Approx
 modA (Approx m e s) (Approx n f t) =
     let r = min s t
@@ -477,9 +484,9 @@ sqrA (Approx m e s) = Approx (m^2 + e^2) (2*abs m*e) (2*s)
 {- Using standard Taylor expansion after range reduction.
 -}
 
-expA :: Approx -> Precision -> Approx
-expA Bottom _ = undefined --Bottom
-expA a@(Approx m e s) res =
+expA :: Precision -> Approx -> Approx
+expA _ Bottom = Bottom
+expA res a@(Approx m e s) =
     let r = max 0 (s + 2 + integerLog2 m)
         -- a' is a scaled by 2^k so that 1/4 < a' < 1/2
         a' = Approx m e (s-r)
@@ -493,15 +500,15 @@ expA a@(Approx m e s) res =
                             0
                             n
         nextTerm = a * p / (fromIntegral n * q)
-        ss = iterate (boundErrorTerm . sqrA) $ fudge (t/(fromIntegral b*q)) nextTerm
+        ss = iterate (boundErrorTerm . sqrA) $ fudge (t * recipA res (fromIntegral b*q)) nextTerm
     in ss !! r
 
 {- Using ln x = atanh ((x-1)/(x+1)) after range reduction.
 -}
 
-lnA :: Approx -> Precision -> Approx
-lnA Bottom _ = Bottom
-lnA a@(Approx m e s) res =
+lnA :: Precision -> Approx -> Approx
+lnA _ Bottom = Bottom
+lnA res a@(Approx m e s) =
     if m <= e then Bottom -- only defined for strictly positive arguments
     else
         let r = s + integerLog2 (3*m) - 1
@@ -511,15 +518,15 @@ lnA a@(Approx m e s) res =
             u2 = sqrA u
             v2 = sqrA v
             Finite res' = min (significance a) (Finite res)
-            n = ceiling . (/2) $ fromIntegral (-res')/(log 0.2/log 2) - 1
+            n = ceiling . (/2) $ fromIntegral res'/(log 0.2/log 2) - 1
             (p, q, b, t) = abpq (repeat 2)
                                 [1,3..]
                                 (u:repeat u2)
                                 (v:repeat v2)
                                 0
                                 n
-            nextTerm = recipA (-res') 5 ^^ (2*n+1)
-        in boundErrorTerm $ fudge (t/(fromIntegral b*q) + fromIntegral r * ln2A (-res)) nextTerm
+            nextTerm = recipA (res') 5 ^^ (2*n+1)
+        in boundErrorTerm $ fudge (t * recipA res (fromIntegral b*q) + fromIntegral r * ln2A (-res)) nextTerm
 
 sinA :: Approx -> Precision -> Approx
 sinA Bottom _ = Bottom

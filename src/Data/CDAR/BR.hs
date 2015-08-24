@@ -143,14 +143,14 @@ sinBR :: BR Approx -> BR Approx
 sinBR = sinRangeReduction2 . sinRangeReduction
 
 instance Floating (BR Approx) where
-    sqrt = sqrtBR
+    sqrt x = sqrtA <$> resources <*> x
     pi = piBinSplitBR
     exp x = expA <$> resources <*> x
-    log x = agmLnA <$> fmap negate resources <*> x
-    sin = sinBR
-    cos = sin . (halfPi +)
+    log x = lnA <$> resources <*> x -- agmLnA is an alternative
+    sin x = sinA <$> resources <*> x
+    cos x = cosA <$> resources <*> x
     asin = undefined
-    atan x = atanA <$> x <*> resources
+    atan x = atanA <$> resources <*> x
     acos = undefined
     sinh = undefined
     cosh = undefined

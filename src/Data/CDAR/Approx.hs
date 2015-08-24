@@ -440,7 +440,7 @@ sqrtA _ Bottom = Bottom
 sqrtA k a@(Approx m e s)
     | -m > e    = error "Attempting sqrt of Approx containing only negative numbers."
     | m < e     = Bottom
-    | e == 0    = let (n:^t) = shiftD k $ sqrtD (k-2) (m:^s)
+    | e == 0    = let (n:^t) = shiftD (-k) $ sqrtD (-k-2) (m:^s)
                   in Approx n 1 t
     | m == e    = let (n:^t) = sqrtD (s `quot` 2 -errorBits) ((m+e):^s)
                       n' = (n+2) `quot` 2
@@ -512,13 +512,13 @@ lnA res a@(Approx m e s) =
     if m <= e then Bottom -- only defined for strictly positive arguments
     else
         let r = s + integerLog2 (3*m) - 1
-            a' = Approx m e (s-r)
+            a' = Approx m e (s-r)  -- a' is a scaled by a power of 2 so that 2/3 <= |a'| <= 4/3
             u = a' - 1
             v = a' + 1
             u2 = sqrA u
             v2 = sqrA v
             Finite res' = min (significance a) (Finite res)
-            n = ceiling . (/2) $ fromIntegral res'/(log 0.2/log 2) - 1
+            n = ceiling . (/2) $ fromIntegral (-res')/(log 0.2/log 2) - 1
             (p, q, b, t) = abpq (repeat 2)
                                 [1,3..]
                                 (u:repeat u2)
@@ -528,44 +528,44 @@ lnA res a@(Approx m e s) =
             nextTerm = recipA (res') 5 ^^ (2*n+1)
         in boundErrorTerm $ fudge (t * recipA res (fromIntegral b*q) + fromIntegral r * ln2A (-res)) nextTerm
 
-sinA :: Approx -> Precision -> Approx
-sinA Bottom _ = Bottom
-sinA a res =
-    let pi = piBorweinA (-res)
-        a1@(Approx m' e' s') = 4 * a / pi
+sinA :: Precision -> Approx -> Approx
+sinA _ Bottom = Bottom
+sinA res a =
+    let pi = piBorweinA res
+        a1@(Approx m' e' s') = 4 * a * recipA res pi
         (k,m1) = m' `divMod` bit (-s')
         a2 = pi * fromDyadic (1:^(-2)) * (Approx m1 e' s')
     in case k `mod` 8 of
-         0 -> sinInRangeA a2 res
-         1 -> cosInRangeA (pi * fromDyadic (1:^(-2)) - a2) res
-         2 -> cosInRangeA a2 res
-         3 -> sinInRangeA (pi * fromDyadic (1:^(-2)) - a2) res
-         4 -> - sinInRangeA a2 res
-         5 -> - cosInRangeA (pi * fromDyadic (1:^(-2)) - a2) res
-         6 -> - cosInRangeA a2 res
-         7 -> - sinInRangeA (pi * fromDyadic (1:^(-2)) - a2) res
+         0 -> sinInRangeA res a2
+         1 -> cosInRangeA res (pi * fromDyadic (1:^(-2)) - a2)
+         2 -> cosInRangeA res a2
+         3 -> sinInRangeA res (pi * fromDyadic (1:^(-2)) - a2)
+         4 -> - sinInRangeA res a2
+         5 -> - cosInRangeA res (pi * fromDyadic (1:^(-2)) - a2)
+         6 -> - cosInRangeA res a2
+         7 -> - sinInRangeA res (pi * fromDyadic (1:^(-2)) - a2)
 
-cosA :: Approx -> Precision -> Approx
-cosA Bottom _ = Bottom
-cosA a res =
-    let pi = piBorweinA (-res)
-        a1@(Approx m' e' s') = 4 * a / pi
+cosA :: Precision -> Approx -> Approx
+cosA _ Bottom = Bottom
+cosA res a =
+    let pi = piBorweinA res
+        a1@(Approx m' e' s') = 4 * a * recipA res pi
         (k,m1) = m' `divMod` bit (-s')
         a2 = pi * fromDyadic (1:^(-2)) * (Approx m1 e' s')
     in case k `mod` 8 of
-         0 -> cosInRangeA a2 res
-         1 -> sinInRangeA (pi * fromDyadic (1:^(-2)) - a2) res
-         2 -> - sinInRangeA a2 res
-         3 -> - cosInRangeA (pi * fromDyadic (1:^(-2)) - a2) res
-         4 -> - cosInRangeA a2 res
-         5 -> - sinInRangeA (pi * fromDyadic (1:^(-2)) - a2) res
-         6 -> sinInRangeA a2 res
-         7 -> cosInRangeA (pi * fromDyadic (1:^(-2)) - a2) res
+         0 -> cosInRangeA res a2
+         1 -> sinInRangeA res (pi * fromDyadic (1:^(-2)) - a2)
+         2 -> - sinInRangeA res a2
+         3 -> - cosInRangeA res (pi * fromDyadic (1:^(-2)) - a2)
+         4 -> - cosInRangeA res a2
+         5 -> - sinInRangeA res (pi * fromDyadic (1:^(-2)) - a2)
+         6 -> sinInRangeA res a2
+         7 -> cosInRangeA res (pi * fromDyadic (1:^(-2)) - a2)
 
-atanA :: Approx -> Precision -> Approx
-atanA Bottom _ = Bottom
-atanA a@(Approx m e s) res =
-  let rr x = x * recipA (-res) (1 + sqrtA (-res) (1 + sqrA x))
+atanA :: Precision -> Approx -> Approx
+atanA _ Bottom = Bottom
+atanA res a@(Approx m e s) =
+  let rr x = x * recipA res (1 + sqrtA res (1 + sqrA x))
       a' = rr . rr . rr $ a -- range reduction so that |a'| < 1/4
       a2 = - sqrA a'
       Finite res' = min (significance a) (Finite res)
@@ -577,15 +577,15 @@ atanA a@(Approx m e s) res =
                           0
                           n
       nextTerm = Approx 1 0 (-2*n)
-  in boundErrorTerm . (8*) $ fudge (t/(fromIntegral b*q)) nextTerm
+  in boundErrorTerm . (8*) $ fudge (t * recipA res (fromIntegral b*q)) nextTerm
 
 swapSinCos :: Precision -> Approx -> Approx
 swapSinCos res a = sqrtA res $ 1 - sqrA a
 
--- Computes sine if first argument is in the range [0,pi/4]
-sinInRangeA :: Approx -> Precision -> Approx
-sinInRangeA Bottom _ = Bottom
-sinInRangeA a res =
+-- Computes sine if second argument is in the range [0,pi/4]
+sinInRangeA :: Precision -> Approx -> Approx
+sinInRangeA _ Bottom = Bottom
+sinInRangeA res a =
     let n = res `div` 2        -- need to improve this estimate (is valid from res>=80)
         (p, q, b, t) = abpq ones
                             ones
@@ -594,12 +594,12 @@ sinInRangeA a res =
                             0
                             n
         nextTerm = fromDyadic (1:^(-res))
-    in boundErrorTerm $ fudge (t/(fromIntegral b*q)) nextTerm
+    in boundErrorTerm $ fudge (t * recipA res (fromIntegral b*q)) nextTerm
 
--- Computes cosine if first argument is in the range [0,pi/4]
-cosInRangeA :: Approx -> Precision -> Approx
-cosInRangeA Bottom _ = Bottom
-cosInRangeA a res =
+-- Computes cosine if second argument is in the range [0,pi/4]
+cosInRangeA :: Precision -> Approx -> Approx
+cosInRangeA _ Bottom = Bottom
+cosInRangeA res a =
     let n = res `div` 2        -- need to improve this estimate (is valid from res>=80)
         (p, q, b, t) = abpq ones
                             ones
@@ -608,7 +608,7 @@ cosInRangeA a res =
                             0
                             n
         nextTerm = fromDyadic (1:^(-res))
-    in boundErrorTerm $ fudge (t/(fromIntegral b*q)) nextTerm
+    in boundErrorTerm $ fudge (t * recipA res (fromIntegral b*q)) nextTerm
 
 piRaw :: [Approx]
 piRaw = unfoldr f (1, (1, 1, 1, 13591409))
@@ -620,9 +620,9 @@ piRaw = unfoldr f (1, (1, 1, 1, 13591409))
             let i2 = i*2
                 (pr, qr, br, tr) = abpq as bs ps qs i i2
                 n = 21+47*(i-1)
-                x = fromIntegral tl * recipA (-n) (fromIntegral (bl*ql))
+                x = fromIntegral tl * recipA n (fromIntegral (bl*ql))
                 x1 = fudge x $ fromDyadic (1:^(-n))
-                x2 = boundErrorTerm $ sqrtA (-n) 1823176476672000 * recipA (-n) x1
+                x2 = boundErrorTerm $ sqrtA n 1823176476672000 * recipA n x1
             in Just ( x2
                     , (i2, (pl * pr, ql * qr, bl * br, fromIntegral br * qr * tl + fromIntegral bl * pl * tr))
                     )
@@ -634,6 +634,7 @@ fudge :: Approx -> Approx -> Approx
 fudge (Approx m e s) (Approx m' e' s') =
     let m'' = 1 + (abs m' + e') `shift` (s' - s + 1)
     in Approx m (e+m'') s
+fudge _ _  = Bottom
 
 --
 
@@ -643,17 +644,17 @@ nonZeroCentred (Approx 0 _ _) = False
 nonZeroCentred _ = True
 
 piMachinA :: Precision -> Approx
-piMachinA t = let (m:^s) = piMachinD t in Approx m 1 s
+piMachinA t = let (m:^s) = piMachinD (-t) in Approx m 1 s
 
 piBorweinA :: Precision -> Approx
-piBorweinA t = let (m:^s) = piBorweinD t in Approx m 1 s
+piBorweinA t = let (m:^s) = piBorweinD (-t) in Approx m 1 s
 
 piAgmA t x = let t' = t - 10
                  a = 1
                  b = boundErrorTerm $ (2*x*recipA t' (x^2-1))^2
                  ss = agmA t a b
                  c = boundErrorTerm . (1-) . (*recipA t' (1-b^2)) . agm2 . agm1 $ ss
-                 d = sqrtA t' (1+b)
+                 d = sqrtA (-t') (1+b)
                  b2 = b^2
                  b3 = b2*b
                  b4 = b2^2
@@ -679,7 +680,7 @@ lnSuperSizeUnknownPi t x =
         ss = agmA t a b
         (an,bn) = last ss
         c = boundErrorTerm . (1-) . (*recipA t' (1-b^2)) . agm2 . agm1 $ ss
-        d = sqrtA t' (1+b)
+        d = sqrtA (-t') (1+b)
         b2 = b^2
         b3 = b2*b
         b4 = b2^2
@@ -705,9 +706,9 @@ lnSuperSizeKnownPi t pi x =
         b2 = b^2
         b3 = b2*b
         b4 = b2^2
-        b1sqrt = sqrtA t' (1+b)
+        b1sqrt = sqrtA (-t') (1+b)
         step (a,b) = (boundErrorTerm $ Approx 1 0 (-1) * (a+b)
-                     ,boundErrorTerm $ sqrtA t' (a*b))
+                     ,boundErrorTerm $ sqrtA (-t') (a*b))
         close (a,b) = approximatedBy 0 $ a-b
         ((an,bn):_) = dropWhile (not . close) $ iterate step (a,b)
         i = boundErrorTerm $ unionApprox (pi*recipA t' (2*an)) (pi*recipA t' (2*bn))
@@ -753,7 +754,7 @@ unionApprox a b = fromEDI $ Interval.Interval (lowerBound a `min` lowerBound b) 
 
 agmA :: Precision -> Approx -> Approx -> [(Approx,Approx)]
 agmA t a b = let t' = t - 5
-                 step (a,b) = (boundErrorTerm $ Approx 1 0 (-1) * (a+b), boundErrorTerm $ sqrtA t' (a*b))
+                 step (a,b) = (boundErrorTerm $ Approx 1 0 (-1) * (a+b), boundErrorTerm $ sqrtA (-t') (a*b))
                  close (a,b) = approximatedBy 0 $ a-b
              in (\(as, bs) -> as ++ take 1 bs) . break close $ iterate step (a,b)
 
@@ -769,7 +770,7 @@ agmLn t x = let t' = t - 10
                 ss = agmA t a b
                 (an,bn) = last ss
                 c = boundErrorTerm . (1-) . (*recipA t' (1-b^2)) . agm2 . agm1 $ ss
-                d = sqrtA t' (1+b)
+                d = sqrtA (-t') (1+b)
                 b2 = b^2
                 b3 = b2*b
                 b4 = b2^2

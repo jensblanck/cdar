@@ -1,3 +1,5 @@
+import Control.Concurrent
+import Control.Monad
 import Criterion.Main
 
 import Data.Bits
@@ -26,21 +28,96 @@ orbit2 c = iterate (((fromRational c)*) . fmap logMap2) (fromRational (1%8))
 suite :: [Benchmark]
 suite = [
     bgroup "Logistic 4" [
-      bench "Double" $ whnf (!! 10000) (orbit 4 :: [Double])
-    , bench "BR Approx" $ whnf (require 10 . (!! 10000)) (orbit 4 :: [BR Approx])
-    , bench "BR Approx (2)" $ whnf (require 10 . (!! 10000)) (orbit2 4 :: [BR Approx])
+      bench "Double" $ nf (!! 10000) (orbit 4 :: [Double])
+    , bench "BR Approx" $ nf (require 10 . (!! 10000)) (orbit 4 :: [BR Approx])
+    , bench "BR Approx (2)" $ nf (require 10 . (!! 10000)) (orbit2 4 :: [BR Approx])
     ],
     bgroup "Logistic 3.5" [
-      bench "Double" $ whnf (!! 10000) (orbit (7%2) :: [Double])
-    , bench "BR Approx" $ whnf (require 10 . (!! 10000)) (orbit (7%2) :: [BR Approx])
-    , bench "BR Approx (2)" $ whnf (require 10 . (!! 10000)) (orbit2 (7%2) :: [BR Approx])
+      bench "Double" $ nf (!! 10000) (orbit (7%2) :: [Double])
+    , bench "BR Approx" $ nf (require 10 . (!! 10000)) (orbit (7%2) :: [BR Approx])
+    , bench "BR Approx (2)" $ nf (require 10 . (!! 10000)) (orbit2 (7%2) :: [BR Approx])
     ],
     bgroup "Logistic 3" [
-      bench "Double" $ whnf (!! 10000) (orbit 3 :: [Double])
-    , bench "BR Approx" $ whnf (require 10 . (!! 10000)) (orbit 3 :: [BR Approx])
-    , bench "BR Approx (2)" $ whnf (require 10 . (!! 10000)) (orbit2 3 :: [BR Approx])
+      bench "Double" $ nf (!! 10000) (orbit 3 :: [Double])
+    , bench "BR Approx" $ nf (require 10 . (!! 10000)) (orbit 3 :: [BR Approx])
+    , bench "BR Approx (2)" $ nf (require 10 . (!! 10000)) (orbit2 3 :: [BR Approx])
+    ]
+  ]
+
+newSuite :: [Benchmark]
+newSuite =
+  [ bgroup "exp"
+    [ bench "double" $ nf exp (1 :: Double)
+    , bench "20" $ nf (require 20 . exp) 1
+    , bench "200" $ nf (require 200 . exp) 1
+    ]
+  , bgroup "ln"
+    [ bench "double" $ nf log (2 :: Double)
+    , bench "20" $ nf (require 20 . log) 2
+    , bench "200" $ nf (require 200 . log) 2
+    ]
+  , bgroup "sin"
+    [ bench "double" $ nf sin (1 :: Double)
+    , bench "20" $ nf (require 20 . sin) 1
+    , bench "200" $ nf (require 200 . sin) 1
+    ]
+  , bgroup "cos"
+    [ bench "double" $ nf cos (1 :: Double)
+    , bench "20" $ nf (require 20 . cos) 1
+    , bench "200" $ nf (require 200 . cos) 1
+    ]
+  , bgroup "atan"
+    [ bench "double" $ nf atan (1 :: Double)
+    , bench "20" $ nf (require 20 . atan) 1
+    , bench "200" $ nf (require 200 . atan) 1
+    ]
+  , bgroup "pi"
+    [ bench "double" $ nf (\_ -> pi :: Double) (1 :: Double)
+    , bench "20" $ nf (\_ -> require 20 $ pi) 1
+    , bench "200" $ nf (\_ -> require 200 $ pi) 1
+    ]
+  , env setupEnv $ \ ~(pi1,pi2) ->
+    bgroup "elementary Approx"
+    [ bench "+ double" $ nf (\x -> x+x) (pi :: Double)
+    , bench "* double" $ nf (\x -> x*x) (pi :: Double)
+    , bench "rec double" $ nf (1/) (pi :: Double)
+    , bench "+ 50" $ nf (\x -> x+x) pi1
+    , bench "* 50" $ nf (\x -> x*x) pi1
+    , bench "rec 50" $ nf (recipA 50) pi1
+    , bench "+ 1000" $ nf (\x -> x+x) pi2
+    , bench "* 1000" $ nf (\x -> x*x) pi2
+    , bench "rec 1000" $ nf (recipA 1000) pi2
+    ]
+  ]
+
+setupEnv = return . (\a -> (limitAndBound 50 a, a)) . limitAndBound 1000 . require 1000 $ pi
+
+threadSuite :: MVar Approx -> MVar Approx -> [Benchmark]
+threadSuite u v =
+  [ bgroup "thread"
+    [ bench "communicate" $ nfIO (do putMVar u (Approx 145324626 123 (-30)); a <- takeMVar v; return a)
     ]
   ]
 
 main :: IO ()
-main = defaultMain suite
+main = defaultMain $ newSuite ++ suite
+
+{- Are threads making criterion confused, times seem ok, but reported as unreliable.
+
+threadSuite :: MVar Approx -> MVar Approx -> [Benchmark]
+threadSuite u v =
+  [ bgroup "thread"
+    [ bench "communicate" $ nfIO (do putMVar u pi2; a <- takeMVar v; return a)
+    ]
+  ]
+
+main :: IO ()
+main = do
+  u <- newEmptyMVar
+  v <- newEmptyMVar
+  forkIO $ server u v
+  defaultMain $ threadSuite u v
+  where server u v = forever $ do
+          a <- takeMVar u
+          putMVar v (a + 1)
+-}

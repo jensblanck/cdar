@@ -296,11 +296,18 @@ recipA t (Approx m e s)
                          1
                          (s-s')
     | (abs m) > e = let d = m*m-e*e
+                        d2 = unsafeShiftR d 1
                         s' = 2 * (integerLog2 m + errorBits)
                     in boundErrorTerm $ Approx
-                           (round (unsafeShiftL m s'%(d)))
-                           (ceiling (1%2 + unsafeShiftL e s'%(d)))
+                           ((unsafeShiftL m s' + d2) `div` d)
+                           ((unsafeShiftL e s' + d2) `div` d)
                            (-s-s')
+    -- | (abs m) > e = let d = m*m-e*e
+    --                     s' = 2 * (integerLog2 m + errorBits)
+    --                 in boundErrorTerm $ Approx
+    --                        (round (unsafeShiftL m s'%(d)))
+    --                        (ceiling (1%2 + unsafeShiftL e s'%(d)))
+    --                        (-s-s')
     | otherwise   = Bottom
 
 divAInteger :: Approx -> Integer -> Approx

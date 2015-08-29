@@ -37,6 +37,7 @@ library
     , parallel >=3.2 && <3.3
   hs-source-dirs:      src
   default-language:    Haskell2010
+  ghc-options:         -Wall -threaded -O2
 
 test-suite test
   type:      exitcode-stdio-1.0
@@ -84,6 +85,22 @@ Benchmark bench
     , parallel >=3.2 && <3.3
   hs-source-dirs:       bench
   default-language: Haskell2010
+  ghc-options:         -Wall -O2 -rtsopts
+
+Benchmark bench-thread
+  type:                 exitcode-stdio-1.0
+  main-is:              bench-thread.hs
+  build-depends:
+      base >=4.7 && <4.9
+    , containers >=0.5 && <0.6
+    , deepseq >=1.3 && <1.5
+    , integer-gmp >=0.5 && <1.1
+    , cdar >= 0.1
+    , criterion >= 1.1 && <1.2
+    , parallel >=3.2 && <3.3
+  hs-source-dirs:       bench
+  default-language: Haskell2010
+  ghc-options:         -Wall -O2 -rtsopts
 
 Executable examples
   hs-source-dirs:      examples

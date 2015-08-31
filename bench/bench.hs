@@ -46,7 +46,28 @@ suite = [
 
 newSuite :: [Benchmark]
 newSuite =
-  [ bgroup "exp"
+  [ bgroup "expappr"
+    [ bench "double" $ nf exp (1 :: Double)
+    , bench "20" $ nf (expA 20) 1
+    , bench "20'" $ nf (expA' 20) 1
+    , bench "200" $ nf (expA 200) 1
+    , bench "200'" $ nf (expA' 200) 1
+    , bench "2000" $ nf (expA 2000) 1
+    , bench "2000'" $ nf (expA' 2000) 1
+    ]
+  , bgroup "lnappr"
+    [ bench "doubleLn" $ nf log (1.5 :: Double)
+    , bench "20" $ nf (lnA 20) (Approx 3 0 (-1))
+    , bench "20'" $ nf (lnA' 20) (Approx 3 0 (-1))
+    , bench "20agm" $ nf (agmLnA (-20)) (Approx 3 0 (-1))
+    , bench "200" $ nf (lnA 200) (Approx 3 0 (-1))
+    , bench "200'" $ nf (lnA' 200) (Approx 3 0 (-1))
+    , bench "200agm" $ nf (agmLnA (-200)) (Approx 3 0 (-1))
+    , bench "2000" $ nf (lnA 2000) (Approx 3 0 (-1))
+    , bench "2000'" $ nf (lnA' 2000) (Approx 3 0 (-1))
+    , bench "2000agm" $ nf (agmLnA (-2000)) (Approx 3 0 (-1))
+    ]
+  , bgroup "exp"
     [ bench "double" $ nf exp (1 :: Double)
     , bench "20" $ nf (require 20 . exp) 1
     , bench "200" $ nf (require 200 . exp) 1

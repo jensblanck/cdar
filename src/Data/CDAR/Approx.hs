@@ -33,7 +33,9 @@ module Data.CDAR.Approx (Approx(..)
                         ,sqrtD
                         ,shiftD
                         ,expA
+                        ,expA'
                         ,lnA
+                        ,lnA'
                         ,sinA
                         ,cosA
                         ,atanA
@@ -510,7 +512,29 @@ expA res a@(Approx m e s) =
         ss = iterate (boundErrorTerm . sqrA) $ fudge (t * recipA res (fromIntegral b*q)) nextTerm
     in ss !! r
 
-{- Using ln x = atanh ((x-1)/(x+1)) after range reduction.
+taylor :: Precision -> [Approx] -> [Integer] -> Approx
+taylor res as qs =
+  let res' = res + errorBits
+      f r a q = limitAndBound res' $ a * recipA res' (fromIntegral q)
+      g Bottom = False
+      g (Approx m _ s) = abs m >= bit (s + res')
+      bs = zipWith3 f (repeat res') as qs
+      (cs,(d:_)) = span g bs
+  in fudge (sum cs) d
+
+expA' :: Precision -> Approx -> Approx
+expA' _ Bottom = Bottom
+expA' res a@(Approx m e s) =
+  let r = max 0 (s + integerLog2 m + res)
+      r' = floor . sqrt . fromIntegral $ r
+      a' = (Approx m e (s-r'))
+      t = taylor
+            (res + r')
+            (iterate (a'*) 1)
+            (scanl1 (*) $ 1:[1..])
+  in (!! r') . iterate (boundErrorTerm . sqrA) $ t
+   
+{- Using ln x = 2*atanh ((x-1)/(x+1)) after range reduction.
 -}
 
 lnA :: Precision -> Approx -> Approx
@@ -534,6 +558,24 @@ lnA res a@(Approx m e s) =
                                 n
             nextTerm = recipA (res') 5 ^^ (2*n+1)
         in boundErrorTerm $ fudge (t * recipA res (fromIntegral b*q) + fromIntegral r * ln2A (-res)) nextTerm
+
+lnA' :: Precision -> Approx -> Approx
+lnA' _ Bottom = Bottom
+lnA' res a@(Approx m e s) =
+    if m <= e then Bottom -- only defined for strictly positive arguments
+    else
+        let res' = res + errorBits
+            r = s + integerLog2 (3*m) - 1
+            a' = Approx m e (s-r)  -- a' is a scaled by a power of 2 so that 2/3 <= a' <= 4/3
+            u = a' - 1
+            v = a' + 1
+            x = u * recipA (res') v  -- so |u/v| <= 1/5
+            x2 = boundErrorTerm $ sqrA x
+            t = taylor
+                  res'
+                  (iterate (x2*) x)
+                  [1,3..]
+        in boundErrorTerm $ 2 * t + fromIntegral r * ln2A (-res')
 
 sinA :: Precision -> Approx -> Approx
 sinA _ Bottom = Bottom
@@ -658,9 +700,9 @@ piBorweinA t = let (m:^s) = piBorweinD (-t) in Approx m 1 s
 
 piAgmA t x = let t' = t - 10
                  a = 1
-                 b = boundErrorTerm $ (2*x*recipA t' (x^2-1))^2
+                 b = boundErrorTerm $ (2*x*recipA (-t') (x^2-1))^2
                  ss = agmA t a b
-                 c = boundErrorTerm . (1-) . (*recipA t' (1-b^2)) . agm2 . agm1 $ ss
+                 c = boundErrorTerm . (1-) . (*recipA (-t') (1-b^2)) . agm2 . agm1 $ ss
                  d = sqrtA (-t') (1+b)
                  b2 = b^2
                  b3 = b2*b
@@ -683,10 +725,10 @@ lnSuperSizeUnknownPi :: Precision -> Approx -> (Approx,Approx)
 lnSuperSizeUnknownPi t x =
     let t' = t - 10
         a = 1
-        b = boundErrorTerm $ (2*x*recipA t' (x^2-1))^2
+        b = boundErrorTerm $ (2*x*recipA (-t') (x^2-1))^2
         ss = agmA t a b
         (an,bn) = last ss
-        c = boundErrorTerm . (1-) . (*recipA t' (1-b^2)) . agm2 . agm1 $ ss
+        c = boundErrorTerm . (1-) . (*recipA (-t') (1-b^2)) . agm2 . agm1 $ ss
         d = sqrtA (-t') (1+b)
         b2 = b^2
         b3 = b2*b
@@ -709,7 +751,7 @@ lnSuperSizeKnownPi :: Precision -> Approx -> Approx -> Approx
 lnSuperSizeKnownPi t pi x =
     let t' = t - 10
         a = 1
-        b = boundErrorTerm $ (2*x*recipA t' (x^2-1))^2
+        b = boundErrorTerm $ (2*x*recipA (-t') (x^2-1))^2
         b2 = b^2
         b3 = b2*b
         b4 = b2^2
@@ -718,7 +760,7 @@ lnSuperSizeKnownPi t pi x =
                      ,boundErrorTerm $ sqrtA (-t') (a*b))
         close (a,b) = approximatedBy 0 $ a-b
         ((an,bn):_) = dropWhile (not . close) $ iterate step (a,b)
-        i = boundErrorTerm $ unionApprox (pi*recipA t' (2*an)) (pi*recipA t' (2*bn))
+        i = boundErrorTerm $ unionApprox (pi*recipA (-t') (2*an)) (pi*recipA (-t') (2*bn))
         l = (i + ((Approx 1 0 (-1))*b-(Approx 3 0 (-4))*b2+(Approx 9 0 (-5))*b3)*b1sqrt)
             / (2 + (Approx 1 0 (-1))*b2 + (Approx 9 0 (-5))*b4)
         u = (i + (Approx 1 0 (-1))*b*b1sqrt) / (2 + (Approx 1 0 (-1))*b2)
@@ -773,10 +815,10 @@ agm2 xs = sum (init xs) + unionApprox 0 (2 * last xs)
 
 agmLn t x = let t' = t - 10
                 a = 1
-                b = boundErrorTerm $ (2*x*recipA t' (x^2-1))^2
+                b = boundErrorTerm $ (2*x*recipA (-t') (x^2-1))^2
                 ss = agmA t a b
                 (an,bn) = last ss
-                c = boundErrorTerm . (1-) . (*recipA t' (1-b^2)) . agm2 . agm1 $ ss
+                c = boundErrorTerm . (1-) . (*recipA (-t') (1-b^2)) . agm2 . agm1 $ ss
                 d = sqrtA (-t') (1+b)
                 b2 = b^2
                 b3 = b2*b

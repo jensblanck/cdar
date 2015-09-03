@@ -32,7 +32,9 @@ module Data.CDAR.Approx (Approx(..)
                         ,sqrtA
                         ,sqrtD
                         ,shiftD
+                        ,sqrA
                         ,expA
+                        ,expA''
                         ,expA'
                         ,lnA
                         ,lnA'
@@ -498,6 +500,26 @@ expA _ Bottom = Bottom
 expA res a@(Approx m e s) =
     let r = max 0 (s + 2 + integerLog2 m)
         -- a' is a scaled by 2^k so that 1/4 < a' < 1/2
+        a' = Approx m e (s-r)
+        -- compute n, number of terms, by estimating factorial
+        (Finite c) = min (significance a) (Finite res)
+        n = (5 + c `div` (1 + integerLog2 (fromIntegral c))) * 9 `div` 5
+        (p, q, b, t) = abpq ones
+                            ones
+                            (1:repeat a')
+                            (1:[1..])
+                            0
+                            n
+        nextTerm = a * p / (fromIntegral n * q)
+        ss = iterate (boundErrorTerm . sqrA) $ fudge (t * recipA res (fromIntegral b*q)) nextTerm
+    in ss !! r
+
+expA'' :: Precision -> Approx -> Approx
+expA'' _ Bottom = Bottom
+expA'' res a@(Approx m e s) =
+    let r = max (floor . sqrt . fromIntegral $ max 0 res)
+                (s + 2 + integerLog2 m)
+        -- Actually no -- a' is a scaled by 2^k so that 1/4 < a' < 1/2
         a' = Approx m e (s-r)
         -- compute n, number of terms, by estimating factorial
         (Finite c) = min (significance a) (Finite res)

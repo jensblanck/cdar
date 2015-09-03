@@ -18,9 +18,9 @@ threadSuite u v =
     , bench "communicate10000" $ nfIO (do putMVar u pi3; a <- takeMVar v; return a)
     ]
   , bgroup "nonthread"
-    [ bench "40" $ nf (+1) pi1
-    , bench "1000" $ nf (+1) pi2
-    , bench "10000" $ nf (+1) pi3
+    [ bench "40" $ nf (sqrA) pi1
+    , bench "1000" $ nf (sqrA) pi2
+    , bench "10000" $ nf (sqrA) pi3
     ]
   ]
 
@@ -28,8 +28,8 @@ main :: IO ()
 main = do
   u <- newEmptyMVar
   v <- newEmptyMVar
-  forkIO $ server u v
+  forkOS $ server u v
   defaultMain $ threadSuite u v
   where server u v = forever $ do
           a <- takeMVar u
-          putMVar v (a + 1)
+          putMVar v (sqrA a)

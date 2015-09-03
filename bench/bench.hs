@@ -50,10 +50,13 @@ newSuite =
     [ bench "double" $ nf exp (1 :: Double)
     , bench "20" $ nf (expA 20) 1
     , bench "20'" $ nf (expA' 20) 1
+    , bench "20''" $ nf (expA'' 20) 1
     , bench "200" $ nf (expA 200) 1
     , bench "200'" $ nf (expA' 200) 1
+    , bench "200''" $ nf (expA'' 200) 1
     , bench "2000" $ nf (expA 2000) 1
     , bench "2000'" $ nf (expA' 2000) 1
+    , bench "2000''" $ nf (expA'' 2000) 1
     ]
   , bgroup "lnappr"
     [ bench "doubleLn" $ nf log (1.5 :: Double)

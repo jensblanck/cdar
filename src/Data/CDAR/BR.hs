@@ -116,7 +116,7 @@ piBinSplitBR :: BR Approx
 piBinSplitBR = limitAndBound <$> resources <*> (require <$> resources <*> BR (repeat (BR piRaw)))
 
 ln2 :: BR Approx
-ln2 = ln2A . negate <$> resources
+ln2 = log2A . negate <$> resources
 
 expBR :: BR Approx -> BR Approx
 expBR = (+ epsilon) . taylor (map (1/) $ fac)
@@ -146,7 +146,7 @@ instance Floating (BR Approx) where
     sqrt x = sqrtA <$> resources <*> x
     pi = piBinSplitBR
     exp x = expA <$> resources <*> x
-    log x = lnA <$> resources <*> x -- agmLnA is an alternative
+    log x = logA <$> resources <*> x -- logAgmA is an alternative
     sin x = sinA <$> resources <*> x
     cos x = cosA <$> resources <*> x
     asin = undefined

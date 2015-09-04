@@ -48,57 +48,54 @@ newSuite :: [Benchmark]
 newSuite =
   [ bgroup "expappr"
     [ bench "double" $ nf exp (1 :: Double)
-    , bench "20" $ nf (expA 20) 1
-    , bench "20'" $ nf (expA' 20) 1
-    , bench "20''" $ nf (expA'' 20) 1
-    , bench "200" $ nf (expA 200) 1
-    , bench "200'" $ nf (expA' 200) 1
-    , bench "200''" $ nf (expA'' 200) 1
-    , bench "2000" $ nf (expA 2000) 1
-    , bench "2000'" $ nf (expA' 2000) 1
-    , bench "2000''" $ nf (expA'' 2000) 1
+    , bench "B40" $ nf (expBinarySplittingA 40) 1
+    , bench "T40" $ nf (expTaylorA 40) 1
+    , bench "B400" $ nf (expBinarySplittingA 400) 1
+    , bench "T400" $ nf (expTaylorA 400) 1
+    , bench "B4000" $ nf (expBinarySplittingA 4000) 1
+    , bench "T4000" $ nf (expTaylorA 4000) 1
     ]
-  , bgroup "lnappr"
-    [ bench "doubleLn" $ nf log (1.5 :: Double)
-    , bench "20" $ nf (lnA 20) (Approx 3 0 (-1))
-    , bench "20'" $ nf (lnA' 20) (Approx 3 0 (-1))
-    , bench "20agm" $ nf (agmLnA (-20)) (Approx 3 0 (-1))
-    , bench "200" $ nf (lnA 200) (Approx 3 0 (-1))
-    , bench "200'" $ nf (lnA' 200) (Approx 3 0 (-1))
-    , bench "200agm" $ nf (agmLnA (-200)) (Approx 3 0 (-1))
-    , bench "2000" $ nf (lnA 2000) (Approx 3 0 (-1))
-    , bench "2000'" $ nf (lnA' 2000) (Approx 3 0 (-1))
-    , bench "2000agm" $ nf (agmLnA (-2000)) (Approx 3 0 (-1))
+  , bgroup "logappr"
+    [ bench "doubleLog" $ nf log (1.5 :: Double)
+    , bench "40B" $ nf (logBinarySplittingA 40) (Approx 3 0 (-1))
+    , bench "40T" $ nf (logTaylorA 40) (Approx 3 0 (-1))
+    , bench "40agm" $ nf (logAgmA (-40)) (Approx 3 0 (-1))
+    , bench "400B" $ nf (logBinarySplittingA 400) (Approx 3 0 (-1))
+    , bench "400T" $ nf (logTaylorA 400) (Approx 3 0 (-1))
+    , bench "400agm" $ nf (logAgmA (-400)) (Approx 3 0 (-1))
+    , bench "4000B" $ nf (logBinarySplittingA 4000) (Approx 3 0 (-1))
+    , bench "4000T" $ nf (logTaylorA 4000) (Approx 3 0 (-1))
+    , bench "4000agm" $ nf (logAgmA (-4000)) (Approx 3 0 (-1))
     ]
   , bgroup "exp"
     [ bench "double" $ nf exp (1 :: Double)
-    , bench "20" $ nf (require 20 . exp) 1
-    , bench "200" $ nf (require 200 . exp) 1
+    , bench "40" $ nf (require 40 . exp) 1
+    , bench "400" $ nf (require 400 . exp) 1
     ]
-  , bgroup "ln"
+  , bgroup "log"
     [ bench "double" $ nf log (2 :: Double)
-    , bench "20" $ nf (require 20 . log) 2
-    , bench "200" $ nf (require 200 . log) 2
+    , bench "40" $ nf (require 40 . log) 2
+    , bench "400" $ nf (require 400 . log) 2
     ]
   , bgroup "sin"
     [ bench "double" $ nf sin (1 :: Double)
-    , bench "20" $ nf (require 20 . sin) 1
-    , bench "200" $ nf (require 200 . sin) 1
+    , bench "40" $ nf (require 40 . sin) 1
+    , bench "400" $ nf (require 400 . sin) 1
     ]
   , bgroup "cos"
     [ bench "double" $ nf cos (1 :: Double)
-    , bench "20" $ nf (require 20 . cos) 1
-    , bench "200" $ nf (require 200 . cos) 1
+    , bench "40" $ nf (require 40 . cos) 1
+    , bench "400" $ nf (require 400 . cos) 1
     ]
   , bgroup "atan"
     [ bench "double" $ nf atan (1 :: Double)
-    , bench "20" $ nf (require 20 . atan) 1
-    , bench "200" $ nf (require 200 . atan) 1
+    , bench "40" $ nf (require 40 . atan) 1
+    , bench "400" $ nf (require 400 . atan) 1
     ]
   , bgroup "pi"
     [ bench "double" $ nf (\_ -> pi :: Double) (1 :: Double)
-    , bench "20" $ nf (\_ -> require 20 $ pi) 1
-    , bench "200" $ nf (\_ -> require 200 $ pi) 1
+    , bench "40" $ nf (\_ -> require 40 $ pi) 1
+    , bench "400" $ nf (\_ -> require 400 $ pi) 1
     ]
   , env setupEnv $ \ ~(pi1,pi2) ->
     bgroup "elementary Approx"

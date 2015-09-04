@@ -33,12 +33,13 @@ module Data.CDAR.Approx (Approx(..)
                         ,sqrtD
                         ,shiftD
                         ,sqrA
-                        ,expA
                         ,log2Factorials
-                        ,expA''
-                        ,expA'
-                        ,lnA
-                        ,lnA'
+                        ,expA
+                        ,expBinarySplittingA
+                        ,expTaylorA
+                        ,logA
+                        ,logBinarySplittingA
+                        ,logTaylorA
                         ,sinA
                         ,cosA
                         ,atanA
@@ -47,8 +48,8 @@ module Data.CDAR.Approx (Approx(..)
                         ,piMachinA
                         ,piBorweinA
                         ,piAgmA
-                        ,ln2A
-                        ,agmLnA
+                        ,log2A
+                        ,logAgmA
                         ,agmLn) where
 
 import           Control.Applicative
@@ -463,6 +464,9 @@ sqrtA k a@(Approx m e s)
                       (n':^t') = sqrtD' s' ((m+e):^s) l
                   in fromEDI $ Interval.Interval (Finite ((n-1):^t)) (Finite ((n'+1):^t'))
 
+sqrA :: Approx -> Approx
+sqrA (Approx m e s) = Approx (m^2 + e^2) (2*abs m*e) (2*s)
+
 -- Binary splitting
 
 abpq :: Num a => [Integer] -> [Integer] -> [a] -> [a] -> Int -> Int -> (a, a, Integer, a)
@@ -490,54 +494,11 @@ abpq as bs ps qs n1 n2
 
 ones = repeat 1
 
-sqrA :: Approx -> Approx
-sqrA (Approx m e s) = Approx (m^2 + e^2) (2*abs m*e) (2*s)
-
-{- Using standard Taylor expansion after range reduction.
--}
-
-expA :: Precision -> Approx -> Approx
-expA _ Bottom = Bottom
-expA res a@(Approx m e s) =
-    let r = max 0 (s + 2 + integerLog2 m)
-        -- a' is a scaled by 2^k so that 1/4 < a' < 1/2
-        a' = Approx m e (s-r)
-        -- compute n, number of terms, by estimating factorial
-        (Finite c) = min (significance a) (Finite res)
-        n = (5 + c `div` (1 + integerLog2 (fromIntegral c))) * 9 `div` 5
-        (p, q, b, t) = abpq ones
-                            ones
-                            (1:repeat a')
-                            (1:[1..])
-                            0
-                            n
-        nextTerm = a * p / (fromIntegral n * q)
-        ss = iterate (boundErrorTerm . sqrA) $ fudge (t * recipA res (fromIntegral b*q)) nextTerm
-    in ss !! r
-
 -- To be changed to Stirling formula if that is faster
 log2Factorials :: [Int]
 log2Factorials = map integerLog2 . scanl1 (*) $ 1:[1..]
 
-expA'' :: Precision -> Approx -> Approx
-expA'' _ Bottom = Bottom
-expA'' res a@(Approx m e s) =
-    let s' = s + integerLog2 m
-        r' = max 2 (floor . sqrt . fromIntegral . max 0 $ res)
-        r = s' + r'
-        -- a' is a scaled by 2^k so that 2^(-r') <= a' < 2^(-r'+1)
-        a' = Approx m e (s-r)
-        (Finite c) = min (significance a) (Finite res)
-        (Just n) = findIndex (>= res+r) $ zipWith (+) log2Factorials [0,r'..]
-        (p, q, b, t) = abpq ones
-                            ones
-                            (1:repeat a')
-                            (1:[1..])
-                            0
-                            n
-        nextTerm = a * p * recipA (res+r) (fromIntegral n * q)
-        ss = iterate (boundErrorTerm . sqrA) $ fudge (t * recipA (res+r) (fromIntegral b*q)) nextTerm
-    in ss !! r
+-- Straighforward Taylor summation
 
 taylor :: Precision -> [Approx] -> [Integer] -> Approx
 taylor res as qs =
@@ -549,24 +510,59 @@ taylor res as qs =
       (cs,(d:_)) = span g bs
   in fudge (sum cs) d
 
-expA' :: Precision -> Approx -> Approx
-expA' _ Bottom = Bottom
-expA' res a@(Approx m e s) =
-  let r = max 0 (s + integerLog2 m + res)
-      r' = floor . sqrt . fromIntegral $ r
-      a' = (Approx m e (s-r'))
-      t = taylor
-            (res + r')
-            (iterate (a'*) 1)
-            (scanl1 (*) $ 1:[1..])
-  in (!! r') . iterate (boundErrorTerm . sqrA) $ t
-   
-{- Using ln x = 2*atanh ((x-1)/(x+1)) after range reduction.
+{- Exponential computed by standard Taylor expansion after range reduction.
 -}
 
-lnA :: Precision -> Approx -> Approx
-lnA _ Bottom = Bottom
-lnA res a@(Approx m e s) =
+-- Is faster for small approximations < ~2000 bits.
+expA :: Precision -> Approx -> Approx
+expA = expTaylorA
+
+expBinarySplittingA :: Precision -> Approx -> Approx
+expBinarySplittingA _ Bottom = Bottom
+expBinarySplittingA res a@(Approx m e s) =
+  let s' = s + integerLog2 m
+      -- r' chosen so that a' below is smaller than 1/2
+      r' = floor . sqrt . fromIntegral . max 5 $ res
+      r = s' + r'
+      -- a' is a scaled by 2^k so that 2^(-r') <= a' < 2^(-r'+1)
+      a' = Approx m e (s-r)
+      (Finite c) = min (significance a) (Finite res)
+      (Just n) = findIndex (>= res+r) $ zipWith (+) log2Factorials [0,r'..]
+      (p, q, b, t) = abpq ones
+                          ones
+                          (1:repeat a')
+                          (1:[1..])
+                          0
+                          n
+      nextTerm = a * p * recipA (res+r) (fromIntegral n * q)
+      ss = iterate (boundErrorTerm . sqrA) $ fudge (t * recipA (res+r) (fromIntegral b*q)) nextTerm
+  in ss !! r
+
+expTaylorA :: Precision -> Approx -> Approx
+expTaylorA _ Bottom = Bottom
+expTaylorA res a@(Approx m e s) =
+  let s' = s + integerLog2 m
+      -- r' chosen so that a' below is smaller than 1/2
+      r' = floor . sqrt . fromIntegral . max 5 $ res
+      r = s' + r'
+      -- a' is a scaled by 2^k so that 2^(-r') <= a' < 2^(-r'+1)
+      a' = (Approx m e (s-r))
+      t = taylor
+            (res + r)
+            (iterate (a'*) 1)
+            (scanl1 (*) $ 1:[1..])
+  in (!! r) . iterate (boundErrorTerm . sqrA) $ t
+   
+{- Logarithms computed by ln x = 2*atanh ((x-1)/(x+1)) after range reduction.
+-}
+
+-- Binary splitting is twice as fast as Taylor. AGM should be used over ~1000 bits.
+logA :: Precision -> Approx -> Approx
+logA = logBinarySplittingA
+
+logBinarySplittingA :: Precision -> Approx -> Approx
+logBinarySplittingA _ Bottom = Bottom
+logBinarySplittingA res a@(Approx m e s) =
     if m <= e then Bottom -- only defined for strictly positive arguments
     else
         let r = s + integerLog2 (3*m) - 1
@@ -584,11 +580,11 @@ lnA res a@(Approx m e s) =
                                 0
                                 n
             nextTerm = recipA (res') 5 ^^ (2*n+1)
-        in boundErrorTerm $ fudge (t * recipA res (fromIntegral b*q) + fromIntegral r * ln2A (-res)) nextTerm
+        in boundErrorTerm $ fudge (t * recipA res (fromIntegral b*q) + fromIntegral r * log2A (-res)) nextTerm
 
-lnA' :: Precision -> Approx -> Approx
-lnA' _ Bottom = Bottom
-lnA' res a@(Approx m e s) =
+logTaylorA :: Precision -> Approx -> Approx
+logTaylorA _ Bottom = Bottom
+logTaylorA res a@(Approx m e s) =
     if m <= e then Bottom -- only defined for strictly positive arguments
     else
         let res' = res + errorBits
@@ -602,7 +598,7 @@ lnA' res a@(Approx m e s) =
                   res'
                   (iterate (x2*) x)
                   [1,3..]
-        in boundErrorTerm $ 2 * t + fromIntegral r * ln2A (-res')
+        in boundErrorTerm $ 2 * t + fromIntegral r * log2A (-res')
 
 sinA :: Precision -> Approx -> Approx
 sinA _ Bottom = Bottom
@@ -707,9 +703,11 @@ piRaw = unfoldr f (1, (1, 1, 1, 13591409))
 -- Second argument is noice to be added to first argument.
 -- Used to allow for the error term when truncating a series.
 fudge :: Approx -> Approx -> Approx
+fudge (Approx m 0 s) (Approx m' e' s') =
+  Approx (m `shift` (s - s')) (abs m' + e' + 1) s'
 fudge (Approx m e s) (Approx m' e' s') =
-    let m'' = 1 + (abs m' + e') `shift` (s' - s + 1)
-    in Approx m (e+m'') s
+  let m'' = 1 + (abs m' + e') `shift` (s' - s + 1)
+  in Approx m (e+m'') s
 fudge _ _  = Bottom
 
 --
@@ -743,8 +741,8 @@ piAgmA t x = let t' = t - 10
                  pi = boundErrorTerm $ unionApprox (2*(snd (last ss))*e) (2*(fst (last ss))*e)
              in pi
                 
-ln2A :: Precision -> Approx
-ln2A t = let (m:^s) = ln2D t in Approx m 1 s
+log2A :: Precision -> Approx
+log2A t = let (m:^s) = ln2D t in Approx m 1 s
 
 -- AGM
 
@@ -814,14 +812,14 @@ lnSmall t x@(Approx m _ s) =
         log2k = lnSuperSizeKnownPi (-t') pi $ 2^k
     in logx2k - log2k
 
-agmLnA :: Precision -> Approx -> Approx
-agmLnA t x
+logAgmA :: Precision -> Approx -> Approx
+logAgmA t x
     | significance x < pure 5     = Bottom
     | 0 `approximatedBy` x        = Bottom
     | signum x == (-1)            = error "Trying to take logarithm of purely negative Approx."
     | lowerBound x > pure 2       = lnLarge t x
     | upperBound x < pure 3       = lnSmall t x
-    | otherwise                   = error "Logic fault in agmLnA."
+    | otherwise                   = error "Logic fault in logAgmA."
 
 unionApprox :: Approx -> Approx -> Approx
 unionApprox Bottom _ = Bottom

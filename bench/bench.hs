@@ -80,7 +80,11 @@ newSuite =
   , bgroup "sin"
     [ bench "double" $ nf sin (1 :: Double)
     , bench "40" $ nf (require 40 . sin) 1
+    , bench "40T" $ nf (sinTaylorA 40) 1
+    , bench "40BR" $ nf (require 40 . sinBR) 1
     , bench "400" $ nf (require 400 . sin) 1
+    , bench "400T" $ nf (sinTaylorA 400) 1
+    , bench "400BR" $ nf (require 400 . sinBR) 1
     ]
   , bgroup "cos"
     [ bench "double" $ nf cos (1 :: Double)

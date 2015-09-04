@@ -40,6 +40,9 @@ module Data.CDAR.Approx (Approx(..)
                         ,logA
                         ,logBinarySplittingA
                         ,logTaylorA
+                        ,sinTaylorA
+                        ,sinTaylorRed1A
+                        ,sinTaylorRed2A
                         ,sinA
                         ,cosA
                         ,atanA
@@ -505,7 +508,7 @@ taylor res as qs =
   let res' = res + errorBits
       f r a q = limitAndBound res' $ a * recipA res' (fromIntegral q)
       g Bottom = False
-      g (Approx m _ s) = abs m >= bit (s + res')
+      g (Approx m _ s) = m /= 0 --abs m >= bit (s + res')
       bs = zipWith3 f (repeat res') as qs
       (cs,(d:_)) = span g bs
   in fudge (sum cs) d
@@ -556,7 +559,7 @@ expTaylorA res a@(Approx m e s) =
 {- Logarithms computed by ln x = 2*atanh ((x-1)/(x+1)) after range reduction.
 -}
 
--- Binary splitting is twice as fast as Taylor. AGM should be used over ~1000 bits.
+-- Binary splitting is faster than Taylor. AGM should be used over ~1000 bits.
 logA :: Precision -> Approx -> Approx
 logA = logBinarySplittingA
 
@@ -599,6 +602,27 @@ logTaylorA res a@(Approx m e s) =
                   (iterate (x2*) x)
                   [1,3..]
         in boundErrorTerm $ 2 * t + fromIntegral r * log2A (-res')
+
+-- Sine computed by Taylor expansion after 2 step range reduction.
+
+sinTaylorA :: Precision -> Approx -> Approx
+sinTaylorA res = sinTaylorRed2A res . sinTaylorRed1A res
+
+sinTaylorRed1A :: Precision -> Approx -> Approx
+sinTaylorRed1A res a = 
+  let pi = piBorweinA res
+      halfPi = pi * (Approx 1 0 (-1))
+  in (subtract halfPi) . abs . (pi -) . abs . (subtract halfPi) . modA a $ 2*pi
+
+sinTaylorRed2A :: Precision -> Approx -> Approx
+sinTaylorRed2A _ Bottom = Bottom
+sinTaylorRed2A res a@(Approx m e s) = 
+  let k = max 0 (integerLog2 m + s + 4)
+      a' = a * recipA (res+k) (3^k)
+      a2 = negate $ sqrA a'
+      t = taylor res (iterate (a2 *) a') (scanl1 (*) $ 1:map (\n -> n*(n+1)) [2,4..])
+      step x = x * (3 - 4 * sqrA x)
+  in (!! k) . iterate (boundErrorTerm . step) $ t
 
 sinA :: Precision -> Approx -> Approx
 sinA _ Bottom = Bottom

@@ -34,6 +34,7 @@ module Data.CDAR.Approx (Approx(..)
                         ,shiftD
                         ,sqrA
                         ,log2Factorials
+                        ,taylor'
                         ,expA
                         ,expBinarySplittingA
                         ,expTaylorA
@@ -47,6 +48,7 @@ module Data.CDAR.Approx (Approx(..)
                         ,cosA
                         ,atanA
                         ,piRaw
+                        ,piA
                         ,nonZeroCentred
                         ,piMachinA
                         ,piBorweinA
@@ -513,6 +515,26 @@ taylor res as qs =
       (cs,(d:_)) = span g bs
   in fudge (sum cs) d
 
+fac :: [Approx]
+fac = map fromInteger $ 1 : scanl1 (*) [1..]
+
+oddFac :: [Approx]
+oddFac = let f (_:x:xs) = x:f xs
+         in f fac
+
+evenFac :: [Approx]
+evenFac = let f (x:_:xs) = x:f xs
+          in f fac
+             
+nonZeroCentredA :: Approx -> Bool
+nonZeroCentredA Bottom = False
+nonZeroCentredA (Approx 0 _ _) = False
+nonZeroCentredA _ = True
+
+--taylor :: [BR Approx] -> BR Approx -> BR Approx
+taylor' res as x =
+  sum . takeWhile nonZeroCentredA . map (limitAndBound res) $ zipWith (*) as (pow x)
+
 {- Exponential computed by standard Taylor expansion after range reduction.
 -}
 
@@ -610,19 +632,20 @@ sinTaylorA res = sinTaylorRed2A res . sinTaylorRed1A res
 
 sinTaylorRed1A :: Precision -> Approx -> Approx
 sinTaylorRed1A res a = 
-  let pi = piBorweinA res
+  let pi = piA res
       halfPi = pi * (Approx 1 0 (-1))
   in (subtract halfPi) . abs . (pi -) . abs . (subtract halfPi) . modA a $ 2*pi
 
 sinTaylorRed2A :: Precision -> Approx -> Approx
 sinTaylorRed2A _ Bottom = Bottom
 sinTaylorRed2A res a@(Approx m e s) = 
-  let k = max 0 (integerLog2 m + s + 4)
-      a' = a * recipA (res+k) (3^k)
+  let k = 4 --max 0 ((integerLog2 m + s + 3) * 8 `div` 5)
+      a' = a * recipA res (3^k)
       a2 = negate $ sqrA a'
-      t = taylor res (iterate (a2 *) a') (scanl1 (*) $ 1:map (\n -> n*(n+1)) [2,4..])
-      step x = x * (3 - 4 * sqrA x)
-  in (!! k) . iterate (boundErrorTerm . step) $ t
+--      t = taylor res (iterate (a2 *) a') (scanl1 (*) $ 1:map (\n -> n*(n+1)) [2,4..])
+      t = taylor' res (map (recipA res) oddFac) a2
+      step x = boundErrorTerm $ x * (3 - 4 * sqrA x)
+  in limitAndBound res . step . step . step . step . boundErrorTerm $ t * a' --(!! k) . iterate (step) . boundErrorTerm $ t * a'
 
 sinA :: Precision -> Approx -> Approx
 sinA _ Bottom = Bottom
@@ -723,6 +746,8 @@ piRaw = unfoldr f (1, (1, 1, 1, 13591409))
                     , (i2, (pl * pr, ql * qr, bl * br, fromIntegral br * qr * tl + fromIntegral bl * pl * tr))
                     )
 
+piA :: Precision -> Approx
+piA res = limitAndBound res . head $ dropWhile ((< pure res) . precision) piRaw
 
 -- Second argument is noice to be added to first argument.
 -- Used to allow for the error term when truncating a series.

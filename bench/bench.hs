@@ -50,10 +50,13 @@ newSuite =
     [ bench "double" $ nf exp (1 :: Double)
     , bench "B40" $ nf (expBinarySplittingA 40) 1
     , bench "T40" $ nf (expTaylorA 40) 1
+    , bench "BR40" $ nf (require 40 . expBR) 1
     , bench "B400" $ nf (expBinarySplittingA 400) 1
     , bench "T400" $ nf (expTaylorA 400) 1
+    , bench "BR400" $ nf (require 400 . expBR) 1
     , bench "B4000" $ nf (expBinarySplittingA 4000) 1
     , bench "T4000" $ nf (expTaylorA 4000) 1
+    , bench "BR4000" $ nf (require 4000 . expBR) 1
     ]
   , bgroup "logappr"
     [ bench "doubleLog" $ nf log (1.5 :: Double)

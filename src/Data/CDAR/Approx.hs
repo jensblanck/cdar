@@ -34,10 +34,11 @@ module Data.CDAR.Approx (Approx(..)
                         ,shiftD
                         ,sqrA
                         ,log2Factorials
-                        ,taylor'
+                        ,taylorA
                         ,expA
                         ,expBinarySplittingA
                         ,expTaylorA
+                        ,expTaylorA'
                         ,logA
                         ,logBinarySplittingA
                         ,logTaylorA
@@ -47,6 +48,7 @@ module Data.CDAR.Approx (Approx(..)
                         ,sinA
                         ,cosA
                         ,atanA
+                        ,atanTaylorA
                         ,piRaw
                         ,piA
                         ,nonZeroCentred
@@ -531,8 +533,10 @@ nonZeroCentredA Bottom = False
 nonZeroCentredA (Approx 0 _ _) = False
 nonZeroCentredA _ = True
 
---taylor :: [BR Approx] -> BR Approx -> BR Approx
-taylor' res as x =
+-- This version is faster especially far smaller precision.
+
+taylorA :: Precision -> [Approx] -> Approx -> Approx
+taylorA res as x =
   sum . takeWhile nonZeroCentredA . map (limitAndBound res) $ zipWith (*) as (pow x)
 
 {- Exponential computed by standard Taylor expansion after range reduction.
@@ -540,7 +544,7 @@ taylor' res as x =
 
 -- Is faster for small approximations < ~2000 bits.
 expA :: Precision -> Approx -> Approx
-expA = expTaylorA
+expA = expTaylorA'
 
 expBinarySplittingA :: Precision -> Approx -> Approx
 expBinarySplittingA _ Bottom = Bottom
@@ -578,12 +582,29 @@ expTaylorA res a@(Approx m e s) =
             (scanl1 (*) $ 1:[1..])
   in (!! r) . iterate (boundErrorTerm . sqrA) $ t
    
+expTaylorA' :: Precision -> Approx -> Approx
+expTaylorA' _ Bottom = Bottom
+expTaylorA' res a@(Approx m e s) =
+  let s' = s + integerLog2 m
+      -- r' chosen so that a' below is smaller than 1/2
+      r' = floor . sqrt . fromIntegral . max 5 $ res
+      r = s' + r'
+      -- a' is a scaled by 2^k so that 2^(-r') <= a' < 2^(-r'+1)
+      a' = (Approx m e (s-r))
+      t = taylorA
+            (res + r)
+            (map (recipA (res+r)) fac)
+            a'
+  in (!! r) . iterate (boundErrorTerm . sqrA) $ t
+   
 {- Logarithms computed by ln x = 2*atanh ((x-1)/(x+1)) after range reduction.
 -}
 
 -- Binary splitting is faster than Taylor. AGM should be used over ~1000 bits.
 logA :: Precision -> Approx -> Approx
-logA = logBinarySplittingA
+logA res = if res < 500
+           then logBinarySplittingA res
+           else logAgmA (-res)
 
 logBinarySplittingA :: Precision -> Approx -> Approx
 logBinarySplittingA _ Bottom = Bottom
@@ -643,13 +664,22 @@ sinTaylorRed2A res a@(Approx m e s) =
       a' = a * recipA res (3^k)
       a2 = negate $ sqrA a'
 --      t = taylor res (iterate (a2 *) a') (scanl1 (*) $ 1:map (\n -> n*(n+1)) [2,4..])
-      t = taylor' res (map (recipA res) oddFac) a2
+      t = taylorA res (map (recipA res) oddFac) a2
       step x = boundErrorTerm $ x * (3 - 4 * sqrA x)
   in limitAndBound res . step . step . step . step . boundErrorTerm $ t * a' --(!! k) . iterate (step) . boundErrorTerm $ t * a'
 
 sinA :: Precision -> Approx -> Approx
-sinA _ Bottom = Bottom
-sinA res a =
+sinA = sinTaylorA
+
+cosA :: Precision -> Approx -> Approx
+cosA res x = sinA res ((Approx 1 0 (-1)) * piA res - x)
+
+atanA :: Precision -> Approx -> Approx
+atanA = atanBinarySplittingA
+
+sinBinarySplittingA :: Precision -> Approx -> Approx
+sinBinarySplittingA _ Bottom = Bottom
+sinBinarySplittingA res a =
     let pi = piBorweinA res
         a1@(Approx m' e' s') = 4 * a * recipA res pi
         (k,m1) = m' `divMod` bit (-s')
@@ -664,9 +694,9 @@ sinA res a =
          6 -> - cosInRangeA res a2
          7 -> - sinInRangeA res (pi * fromDyadic (1:^(-2)) - a2)
 
-cosA :: Precision -> Approx -> Approx
-cosA _ Bottom = Bottom
-cosA res a =
+cosBinarySplittingA :: Precision -> Approx -> Approx
+cosBinarySplittingA _ Bottom = Bottom
+cosBinarySplittingA res a =
     let pi = piBorweinA res
         a1@(Approx m' e' s') = 4 * a * recipA res pi
         (k,m1) = m' `divMod` bit (-s')
@@ -681,9 +711,9 @@ cosA res a =
          6 -> sinInRangeA res a2
          7 -> cosInRangeA res (pi * fromDyadic (1:^(-2)) - a2)
 
-atanA :: Precision -> Approx -> Approx
-atanA _ Bottom = Bottom
-atanA res a@(Approx m e s) =
+atanBinarySplittingA :: Precision -> Approx -> Approx
+atanBinarySplittingA _ Bottom = Bottom
+atanBinarySplittingA res a@(Approx m e s) =
   let rr x = x * recipA res (1 + sqrtA res (1 + sqrA x))
       a' = rr . rr . rr $ a -- range reduction so that |a'| < 1/4
       a2 = - sqrA a'
@@ -697,6 +727,16 @@ atanA res a@(Approx m e s) =
                           n
       nextTerm = Approx 1 0 (-2*n)
   in boundErrorTerm . (8*) $ fudge (t * recipA res (fromIntegral b*q)) nextTerm
+
+atanTaylorA :: Precision -> Approx -> Approx
+atanTaylorA _ Bottom = Bottom
+atanTaylorA res a@(Approx m e s) =
+  let rr x = x * recipA res (1 + sqrtA res (1 + sqrA x))
+      a' = rr . rr . rr $ a -- range reduction so that |a'| < 1/4
+      a2 = - sqrA a'
+      Finite res' = min (significance a) (Finite res)
+      t = taylorA res' (map (recipA res') [1,3..]) a2
+  in boundErrorTerm . (8*) $ t
 
 swapSinCos :: Precision -> Approx -> Approx
 swapSinCos res a = sqrtA res $ 1 - sqrA a

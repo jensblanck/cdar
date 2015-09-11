@@ -7,20 +7,20 @@ import Data.Ratio
 import Data.CDAR
 
 pi1 = limitAndBound 40 . require 40 $ pi
-pi2 = limitAndBound 1000 . require 1000 $ pi
-pi3 = limitAndBound 10000 . require 10000 $ pi
+pi2 = limitAndBound 400 . require 400 $ pi
+pi3 = limitAndBound 4000 . require 4000 $ pi
 
 threadSuite :: MVar Approx -> MVar Approx -> [Benchmark]
 threadSuite u v =
   [ bgroup "thread"
     [ bench "communicate40" $ nfIO (do putMVar u pi1; a <- takeMVar v; return a)
-    , bench "communicate1000" $ nfIO (do putMVar u pi2; a <- takeMVar v; return a)
-    , bench "communicate10000" $ nfIO (do putMVar u pi3; a <- takeMVar v; return a)
+    , bench "communicate400" $ nfIO (do putMVar u pi2; a <- takeMVar v; return a)
+    , bench "communicate4000" $ nfIO (do putMVar u pi3; a <- takeMVar v; return a)
     ]
   , bgroup "nonthread"
     [ bench "40" $ nf (sqrA) pi1
-    , bench "1000" $ nf (sqrA) pi2
-    , bench "10000" $ nf (sqrA) pi3
+    , bench "400" $ nf (sqrA) pi2
+    , bench "4000" $ nf (sqrA) pi3
     ]
   ]
 

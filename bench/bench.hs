@@ -50,12 +50,15 @@ newSuite =
     [ bench "double" $ nf exp (1 :: Double)
     , bench "B40" $ nf (expBinarySplittingA 40) 1
     , bench "T40" $ nf (expTaylorA 40) 1
+    , bench "T'40" $ nf (expTaylorA' 40) 1
     , bench "BR40" $ nf (require 40 . expBR) 1
     , bench "B400" $ nf (expBinarySplittingA 400) 1
     , bench "T400" $ nf (expTaylorA 400) 1
+    , bench "T'400" $ nf (expTaylorA' 400) 1
     , bench "BR400" $ nf (require 400 . expBR) 1
     , bench "B4000" $ nf (expBinarySplittingA 4000) 1
     , bench "T4000" $ nf (expTaylorA 4000) 1
+    , bench "T'4000" $ nf (expTaylorA' 4000) 1
     , bench "BR4000" $ nf (require 4000 . expBR) 1
     ]
   , bgroup "logappr"
@@ -88,6 +91,9 @@ newSuite =
     , bench "400" $ nf (require 400 . sin) 1
     , bench "400T" $ nf (sinTaylorA 400) 1
     , bench "400BR" $ nf (require 400 . sinBR) 1
+--    , bench "4000" $ nf (require 4000 . sin) 1
+    , bench "4000T" $ nf (sinTaylorA 4000) 1
+    , bench "4000BR" $ nf (require 4000 . sinBR) 1
     ]
   , bgroup "cos"
     [ bench "double" $ nf cos (1 :: Double)
@@ -104,6 +110,45 @@ newSuite =
     , bench "40" $ nf (\_ -> require 40 $ pi) 1
     , bench "400" $ nf (\_ -> require 400 $ pi) 1
     ]
+  , env setupEnvPi $ \ ~(pi40,pi400,pi4000) ->
+    bgroup "ccc2015"
+    [ bench "pi D" $ nf (\_ -> pi :: Double) (1 :: Double)
+    , bench "pi 40" $ nf (\_ -> require 40 $ pi) 1
+    , bench "pi 400" $ nf (\_ -> require 400 $ pi) 1
+    , bench "pi 4000" $ nf (\_ -> require 4000 $ pi) 1
+    , bench "+ D" $ nf (\x -> x+x) (pi :: Double)
+    , bench "+ 40" $ nf (\x -> x+x) pi40
+    , bench "+ 400" $ nf (\x -> x+x) pi400
+    , bench "+ 4000" $ nf (\x -> x+x) pi4000
+    , bench "* D" $ nf (\x -> x*x) (pi :: Double)
+    , bench "* 40" $ nf (\x -> x*x) pi40
+    , bench "* 400" $ nf (\x -> x*x) pi400
+    , bench "* 4000" $ nf (\x -> x*x) pi4000
+    , bench "* D" $ nf (1/) (pi :: Double)
+    , bench "* 40" $ nf (1/) pi40
+    , bench "* 400" $ nf (1/) pi400
+    , bench "* 4000" $ nf (1/) pi4000
+    , bench "exp D" $ nf exp (1 :: Double)
+    , bench "exp 40" $ nf (require 40 . exp) 1
+    , bench "exp 400" $ nf (require 400 . exp) 1
+    , bench "exp 4000" $ nf (require 4000 . exp) 1
+    , bench "log D" $ nf log (2 :: Double)
+    , bench "log 40" $ nf (require 40 . log) 2
+    , bench "log 400" $ nf (require 400 . log) 2
+    , bench "log 4000" $ nf (require 4000 . log) 2
+    , bench "sin D" $ nf sin (1 :: Double)
+    , bench "sin 40" $ nf (require 40 . sinBR) 1
+    , bench "sin 400" $ nf (require 400 . sinBR) 1
+    , bench "sin 4000" $ nf (require 4000 . sinBR) 1
+    , bench "cos D" $ nf cos (1 :: Double)
+    , bench "cos 40" $ nf (require 40 . cosBR) 1
+    , bench "cos 400" $ nf (require 400 . cosBR) 1
+    , bench "cos 4000" $ nf (require 4000 . cosBR) 1
+    , bench "atan D" $ nf atan (1 :: Double)
+    , bench "atan 40" $ nf (require 40 . atanBR) 1
+    , bench "atan 400" $ nf (require 400 . atanBR) 1
+    , bench "atan 4000" $ nf (require 4000 . atanBR) 1
+    ]
   , env setupEnv $ \ ~(pi1,pi2) ->
     bgroup "elementary Approx"
     [ bench "+ double" $ nf (\x -> x+x) (pi :: Double)
@@ -119,6 +164,7 @@ newSuite =
   ]
 
 setupEnv = return . (\a -> (limitAndBound 50 a, a)) . limitAndBound 1000 . require 1000 $ pi
+setupEnvPi = return . (\a -> (limitAndBound 40 a, limitAndBound 400 a, limitAndBound 4000 a)) . require 4000 $ pi
 
 threadSuite :: MVar Approx -> MVar Approx -> [Benchmark]
 threadSuite u v =

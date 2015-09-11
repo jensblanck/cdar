@@ -100,8 +100,14 @@ alternateSign :: Num a => [a] -> [a]
 alternateSign = zipWith (*) (cycle [1,-1])
 
 atanBR :: BR Approx -> BR Approx
-atanBR x = let x2 = x^2
-           in epsilon + x * taylor (map (1/) . alternateSign . map fromInteger $ [1,3..]) x2
+atanBR x =
+  let rr y = y / (1 + sqrt (1 + x^2))
+      x' = rr . rr . rr $ x -- range reduction so that |a'| < 1/4
+      x2 = - x'^2
+      t = epsilon + x * taylor (map ((1/) . fromIntegral) [1,3..]) x2
+  in boundErrorTerm . (8*) <$> t
+--  let x2 = x^2
+--           in epsilon + x * taylor (map (1/) . alternateSign . map fromInteger $ [1,3..]) x2
 
 piBRMachin :: BR Approx
 piBRMachin = 4*(4*atanBR (1/5)-atanBR (1/239))
@@ -141,6 +147,9 @@ sinBRTaylor x = let x2 = x^2
 
 sinBR :: BR Approx -> BR Approx
 sinBR = sinRangeReduction2 . sinRangeReduction
+
+cosBR :: BR Approx -> BR Approx
+cosBR = sinBR . (halfPi -)
 
 instance Floating (BR Approx) where
     sqrt x = sqrtA <$> resources <*> x

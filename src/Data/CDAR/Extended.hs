@@ -4,7 +4,6 @@
 {-# LANGUAGE DeriveFunctor #-}
 module Data.CDAR.Extended (Extended(..)) where
 
-import Control.Applicative
 import Control.Monad
 
 -- |Extended numbers are either finite numbers or one of the two infinities.

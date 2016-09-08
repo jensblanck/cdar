@@ -69,7 +69,7 @@ sqrtD t x = sqrtD' t x $ initSqrtD x
       initSqrtD :: Dyadic -> Dyadic
       initSqrtD (0:^_) = (0:^0)
       initSqrtD (m:^s) = let i = integerLog2 m
-                             n = shiftR m (i-2)
+                             n = shift m (2-i)
                              s' = (s+i) `div` 2 - 3
                          in if odd (s+i)
                             then (n+8):^s'

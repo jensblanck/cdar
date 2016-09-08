@@ -12,3 +12,6 @@ cabal-dev
 cabal.sandbox.config
 cabal.config
 Test
+stack.yaml
+cdar.log
+.stack-work/

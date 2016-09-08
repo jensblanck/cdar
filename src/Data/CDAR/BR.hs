@@ -1,7 +1,7 @@
 {-# LANGUAGE BangPatterns,GADTs,TypeSynonymInstances,FlexibleInstances #-}
 module Data.CDAR.BR where
 
-import           Control.Applicative
+--import           Control.Applicative
 import qualified Data.CDAR.Approx as A
 import           Data.CDAR.Approx hiding (toDouble,approximatedBy)
 import           Data.CDAR.IntegerLog
@@ -90,10 +90,12 @@ fac = map fromInteger $ 1 : scanl1 (*) [1..]
 
 oddFac :: [BR Approx]
 oddFac = let f (_:x:xs) = x:f xs
+             f _ = error "Impossible"
          in f fac
 
 evenFac :: [BR Approx]
 evenFac = let f (x:_:xs) = x:f xs
+              f _ = error "Impossible"
           in f fac
 
 alternateSign :: Num a => [a] -> [a]

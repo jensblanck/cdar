@@ -1,8 +1,11 @@
 module Main where
 
 import Data.CDAR
+import ExamplesRump
 --import Criterion.Main
 --import Criterion.Config
 
 main :: IO ()
-main = putStrLn . showA . require 50 . sin $ pi / 2
+main = do
+  putStrLn . showA . require 50 . sin $ pi / 2
+  examplesRump

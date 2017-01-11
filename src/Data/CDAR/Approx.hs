@@ -85,7 +85,6 @@ module Data.CDAR.Approx (Approx(..)
 import           Control.Applicative (ZipList (..))
 import           Control.DeepSeq
 import           Control.Exception
---import           Control.Parallel.Strategies
 import           Data.Bits
 import           Data.CDAR.Dyadic hiding (normalise)
 import           Data.CDAR.Extended
@@ -1022,53 +1021,40 @@ instance Fractional CReal where
 instance Real CReal where
     toRational = toRational . require 40
 
-showCRealN :: Int -> ZipList Approx -> String
+showCRealN :: Int -> CReal -> String
 showCRealN n = concat . intersperse "\n" . map showA . take n . getZipList
 
 ok :: Int -> Approx -> Approx
 ok d a = if precision a > fromIntegral d then a else Bottom
 
-require :: Int -> ZipList Approx -> Approx
+require :: Int -> CReal -> Approx
 require d x = head . dropWhile (== Bottom) . getZipList $ ok d <$> x
 
-toDouble :: ZipList Approx -> Double
+toDouble :: CReal -> Double
 toDouble = toDoubleA . require (54+errorBits)
 
 transposeZipList :: [ZipList a] -> ZipList [a]
 transposeZipList = ZipList . transpose . map getZipList
 
-polynomial :: [ZipList Approx] -> ZipList Approx -> ZipList Approx
+polynomial :: [CReal] -> CReal -> CReal
 polynomial as x = 
     (\as' x' l -> ok 10 . limitAndBound l $ poly as' x') <$> transposeZipList as <*> x <*> resources
 
-taylorCR :: [ZipList Approx] -> ZipList Approx -> ZipList Approx
+taylorCR :: [CReal] -> CReal -> CReal
 taylorCR as x =
     (\as' x' l -> sum . takeWhile nonZeroCentred . map (limitAndBound l) $ zipWith (*) as' (pow x'))
     <$> transposeZipList as <*> x <*> resources
 
-epsilon :: ZipList Approx
+epsilon :: CReal
 epsilon = Approx 0 1 . negate <$> resources
 
-sqrtCR :: ZipList Approx -> ZipList Approx
+sqrtCR :: CReal -> CReal
 sqrtCR x = (\a l -> ok 10 . limitAndBound l $ sqrtA (-l) a) <$> x <*> resources
-
---fac :: [ZipList Approx]
---fac = map fromInteger $ 1 : scanl1 (*) [1..]
-
---oddFac :: [ZipList Approx]
---oddFac = let f (_:x:xs) = x:f xs
---              f _ = error "Impossible"
---          in f fac
-
--- evenFac :: [ZipList Approx]
--- evenFac = let f (x:_:xs) = x:f xs
---               f _ = error "Impossible"
---           in f fac
 
 alternateSign :: Num a => [a] -> [a]
 alternateSign = zipWith (*) (cycle [1,-1])
 
-atanCR :: ZipList Approx -> ZipList Approx
+atanCR :: CReal -> CReal
 atanCR x =
   let rr y = y / (1 + sqrt (1 + x^2))
       x' = rr . rr . rr $ x -- range reduction so that |a'| < 1/4
@@ -1078,31 +1064,31 @@ atanCR x =
 --  let x2 = x^2
 --           in epsilon + x * taylor (map (1/) . alternateSign . map fromInteger $ [1,3..]) x2
 
-piCRMachin :: ZipList Approx
+piCRMachin :: CReal
 piCRMachin = 4*(4*atanCR (1/5)-atanCR (1/239))
 
-piMachinCR :: ZipList Approx
+piMachinCR :: CReal
 piMachinCR = piMachinA . negate <$> resources
 
-piBorweinCR :: ZipList Approx
+piBorweinCR :: CReal
 piBorweinCR = piBorweinA . negate <$> resources
 
-piBinSplitCR :: ZipList Approx
+piBinSplitCR :: CReal
 piBinSplitCR = limitAndBound <$> resources <*> (require <$> resources <*> ZipList (repeat (ZipList piRaw)))
 
-ln2 :: ZipList Approx
+ln2 :: CReal
 ln2 = log2A . negate <$> resources
 
-expCR :: ZipList Approx -> ZipList Approx
+expCR :: CReal -> CReal
 expCR = (+ epsilon) . taylorCR (map (1/) $ fac)
 
-halfPi :: ZipList Approx
+halfPi :: CReal
 halfPi = pure (Approx 1 0 (-1)) * pi
 
-sinRangeReduction :: ZipList Approx -> ZipList Approx
+sinRangeReduction :: CReal -> CReal
 sinRangeReduction x = (subtract halfPi) . abs . (pi -) . abs . (subtract halfPi) $ modA <$> x <*> 2 * pi
 
-sinRangeReduction2 :: ZipList Approx -> ZipList Approx
+sinRangeReduction2 :: CReal -> CReal
 sinRangeReduction2 x = let k = (\a -> case a of 
                                         (Approx m _ s) -> max 0 $ 8 * (integerLog2 m + s + 3) `div` 5
                                         Bottom -> 0) <$> x
@@ -1110,14 +1096,14 @@ sinRangeReduction2 x = let k = (\a -> case a of
                            step z = z*(3-4*z^2)
                        in (\y' k' l -> limitAndBound l $ foldr ($) y' (replicate k' step)) <$> y <*> k <*> resources
 
-sinCRTaylor :: ZipList Approx -> ZipList Approx
+sinCRTaylor :: CReal -> CReal
 sinCRTaylor x = let x2 = x^2
                 in epsilon + x * taylorCR (map (1/) $ alternateSign oddFac) x2
 
-sinCR :: ZipList Approx -> ZipList Approx
+sinCR :: CReal -> CReal
 sinCR = sinRangeReduction2 . sinRangeReduction
 
-cosCR :: ZipList Approx -> ZipList Approx
+cosCR :: CReal -> CReal
 cosCR = sinCR . (halfPi -)
 
 instance Floating CReal where

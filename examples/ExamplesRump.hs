@@ -11,7 +11,7 @@ r = p^^3*(p^^16+6561*q^^16-17496*p^^2*q^^14+20412*p^^4*q^^12-13608*p^^6*q^^10+56
 
 examplesRump = do
   print $ 21*b*b-2*a*a+55*b*b*b*b-10*a*a*b*b+a/(2*b)
-  putStrLn . showBRn 3 $ 21*b*b-2*a*a+55*b*b*b*b-10*a*a*b*b+a/(2*b)
+  putStrLn . showCRealN 3 $ 21*b*b-2*a*a+55*b*b*b*b-10*a*a*b*b+a/(2*b)
   print r
-  putStrLn . showBRn 3 $ r
+  putStrLn . showCRealN 3 $ r
   

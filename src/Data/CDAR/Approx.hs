@@ -63,7 +63,7 @@ module Data.CDAR.Approx (Approx(..)
                         ,logAgmA
                         ,agmLn) where
 
---import           Control.Applicative
+--import           Control.Applicative (ZipList (..))
 import           Control.DeepSeq
 import           Control.Exception
 --import           Control.Parallel.Strategies
@@ -319,7 +319,7 @@ recipA t (Approx m e s)
                            ((unsafeShiftL m s' + d2) `div` d)
                            ((unsafeShiftL e s' + d2) `div` d)
                            (-s-s')
-    -- | (abs m) > e = let d = m*m-e*e
+    --  (abs m) > e = let d = m*m-e*e
     --                     s' = 2 * (integerLog2 m + errorBits)
     --                 in boundErrorTerm $ Approx
     --                        (round (unsafeShiftL m s'%(d)))
@@ -967,4 +967,4 @@ agmLn t x = let t' = t - 10
                       ((2+(Approx 1 0 (-1))*b2+(Approx 9 0 (-5))*b4)*r-((Approx 1 0 (-1))*b-(Approx 3 0 (-4))*b2+(Approx 9 0 (-5))*b3)*d)
                 _pi = boundErrorTerm $ unionApprox (2*(snd (last ss))*e) (2*(fst (last ss))*e)
             in r --[a,b,c,d,b2,b3,b4,l,u,r,e,_pi]
-                
+  

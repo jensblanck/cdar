@@ -1,11 +1,18 @@
 {-# LANGUAGE BangPatterns,GADTs,TypeSynonymInstances,FlexibleInstances #-}
 {-|
-An implementation of computable real arithmetic using lists of rapidly shrining centred dyadic intervals.
+= Computable Real Arithmetic
+This module provides the data type 'CReal' that implements the real closed field of computable real numbers.
+
+== Centred Dyadic Approximations
+The computable reals are realised as lists of rapidly shrinking intervals. The intervals used here are centred dyadic intervals, implemented here as the data type 'Approx'.
+
+For more information on the theoretical aspects see <http://cs.swan.ac.uk/~csjens/pdf/centred.pdf>.
 -}
 module Data.CDAR.Approx (Approx(..)
-                        ,errorBits
-                        ,errorBound
-                        ,defaultPrecision
+                        ,CReal
+--                        ,errorBits
+--                        ,errorBound
+--                        ,defaultPrecision
                         ,showA
                         ,showInBaseA
                         ,toEDI
@@ -66,7 +73,6 @@ module Data.CDAR.Approx (Approx(..)
                         ,lnSuperSizeUnknownPi
                         ,logAgmA
                         ,agmLn
-                        ,CReal
                         ,showCRealN
                         ,ok
                         ,require
@@ -80,7 +86,9 @@ module Data.CDAR.Approx (Approx(..)
                         ,ln2
                         ,sinCRTaylor
                         ,sinCR
-                        ,cosCR) where
+                        ,cosCR
+                        ,sqrtCR
+                        ,expCR) where
 
 import           Control.Applicative (ZipList (..))
 import           Control.DeepSeq
@@ -96,10 +104,42 @@ import           Data.List (findIndex, intersperse, transpose, unfoldr, zipWith4
 import           Data.Ratio
 
 type EDI = Interval.Interval (Extended Dyadic)
-type Precision = Int    -- Precition measures how many bits after the binary point.
+type Precision = Int    -- Precision measures how many bits after the binary point.
 
--- Centred dyadic approximations
+{-|
+= Centred Dyadic Approximations
+There are two constructors for approximations:
 
+- 'Approx' is encodes some finite interval with dyadic endpoints. A real
+  number is /approximated/ by the approximation is it belongs to the interval.
+- 'Bottom' is the trivial approximation that approximates all real numbers.
+
+The three fields of an @Approx m e s@ should be thought of as:
+
+[@m@] the midpoint
+[@e@] the error term
+[@s@] the exponent
+
+Thus, a value @Approx m e s@ is to be interpreted as the interval
+[(m-e)*2^s, (m+e)*2^s].
+
+== Centred intervals
+We have opted for a centred representation of the intervals. It is also
+possible to represent the endpoints as 'Dyadic' numbers. The rationale for a
+centred repersentation is that we often normalise an approximation @Approx m e
+s@ so that @e@ is limited in size. This allows many operation to only work on
+one large number @m@.
+
+== Potential for overflow
+Since the third field (the exponent) is only an 'Int' it may overflow. This is
+an optimisation that was adopted since it seems unlikely that overflow in a 64
+bit Int exponent would occur. In a 32 bit system, this is potentially an
+issue.
+
+The 'Integer' data type is unbonded, but is, of course, bounded by the
+available memory available in the computer. No attempt has been made to check
+for exhausted memory.
+-}
 data Approx = Approx Integer Integer Int
             | Bottom
               deriving (Read,Show)
@@ -107,6 +147,14 @@ data Approx = Approx Integer Integer Int
 instance NFData Approx where
     rnf Bottom = ()
     rnf (Approx m e s) = rnf m `seq` rnf e `seq` rnf s
+
+{-|
+=The Computable Real data type
+
+The data type of computable reals as 'ZipList's of 'Approx'.
+The 'ZipList' construction allows us to use applicative style.
+-}
+type CReal = ZipList Approx
 
 -- |Number of bits that error term is allowed to take up. A larger size allows
 -- for more precise but slightly more costly computations. The value here is
@@ -122,10 +170,19 @@ errorBound = 2^errorBits
 defaultPrecision :: Precision
 defaultPrecision = 31
 
+{-|
+Gives a decimal representation of an approximation. It tries to give as many decimal digits as possible given the precision of the approximation. The representation may be wrong by 1 ulp (unit in last place). If the value is not exact the representation will be followed by @~@.
+
+The representation is not always intuitive:
+>>> showA (Approx 1 1 0)
+"1.~"
+
+The meaning of the above is that it is 1, but then the added @~@ (which must be after the decimal point) means that the last position may be off by 1, i.e., it could be down to 0 or up to 2. And [0,2] is indeed the range encoded by the above approximation.
+-}
 showA :: Approx -> String
 showA = showInBaseA 10
 
--- |Allows to show an `Approx` in bases up to 16.
+-- |Similar to 'showA' but can generate representations in other bases (<= 16).
 {- am is the absolute value of the significand
    b corresponds to the value 1 with respect to the shift s -- this is used to find the digits in the auxiliary functions
    i is the integral part of am
@@ -988,9 +1045,7 @@ agmLn t x = let t' = t - 10
             in r --[a,b,c,d,b2,b3,b4,l,u,r,e,_pi]
   
 
--- | The data type of computable reals as ZipLists of Approx.
--- The ZipList construction allows us to use applicative style.
-type CReal = ZipList Approx
+-- The CReal implementation
 
 type Resources = Int
 

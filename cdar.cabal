@@ -18,8 +18,8 @@ cabal-version:       >=1.10
 library
   exposed-modules:
       Data.CDAR
-    , Data.CDAR.BR
-    , Data.CDAR.CR
+--    , Data.CDAR.BR
+--    , Data.CDAR.CR
     , Data.CDAR.Extended
     , Data.CDAR.POrd
     , Data.CDAR.Approx

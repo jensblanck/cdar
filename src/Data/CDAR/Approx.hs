@@ -541,7 +541,7 @@ significance Bottom         = NegInf
 {-|
 This function bounds the error term of an 'Approx'.
 
-If @y = boundErrorTerm x@ then it is always the case that @x `'better'` y@.
+It is always the case that @x `'better'` boundErrorTerm x@.
 
 Consider an approximation @Approx m e s@. If @e@ has /k/ bits then that
 essentially expresses that the last /k/ bits of @m@ are unknown or garbage. By
@@ -570,6 +570,8 @@ boundErrorTerm a@(Approx m e s)
 Limits the size of an approximation by restricting how much precision an
 approximation can have.
 
+It is always the case that @x `'better'` limitSize x@.
+
 This is accomplished by restricting the exponent of the approximation from
 below. In other words, we limit the precision possible.
 
@@ -594,6 +596,8 @@ checkPrecisionLeft a
         | otherwise = throw $ LossOfPrecision
 
 -- |Bounds the error term and limits the precision of an approximation.
+--
+-- It is always the case that @x `'better'` limitAndBound x@.
 limitAndBound :: Precision -> Approx -> Approx
 limitAndBound limit =
     limitSize limit . boundErrorTerm

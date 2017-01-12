@@ -13,6 +13,8 @@ module Data.CDAR.Approx (Approx(..)
 --                        ,errorBits
 --                        ,errorBound
 --                        ,defaultPrecision
+                        ,EDI
+                        ,Precision
                         ,showA
                         ,showInBaseA
                         ,toEDI
@@ -20,6 +22,7 @@ module Data.CDAR.Approx (Approx(..)
                         ,lowerBound
                         ,upperBound
                         ,centre
+                        ,radius
                         ,diameter
                         ,exact
                         ,approximatedBy
@@ -103,8 +106,11 @@ import           Data.Char (intToDigit)
 import           Data.List (findIndex, intersperse, transpose, unfoldr, zipWith4)
 import           Data.Ratio
 
+-- |The 'EDI' type stands for Extended Dyadic Interval. This is an endpoint
+-- representation of our approximations.
 type EDI = Interval.Interval (Extended Dyadic)
-type Precision = Int    -- Precision measures how many bits after the binary point.
+-- |A type synonym. Used to denote number of bits after binary point.
+type Precision = Int
 
 {-|
 = Centred Dyadic Approximations
@@ -151,8 +157,34 @@ instance NFData Approx where
 {-|
 =The Computable Real data type
 
-The data type of computable reals as 'ZipList's of 'Approx'.
-The 'ZipList' construction allows us to use applicative style.
+Computable reals are realised as infinite sequences of centred dyadic
+representations.
+
+All approximations in such a sequence should be pairwise consistent, i.e.,
+have a non-empty intersection. However, there is no check that this is
+actually the case.
+
+If the diameter of the approximations tend to zero we say that the sequences
+converges to the unique real number in the intersection of all intervals. Some
+operations on computable reals are partial, notably equality and ordering. A
+consequence of this is that there is no guarantee that a computable real will
+converge.
+
+For the /n/-th element in the sequence there is a bound on how much effort is
+put into the computation of the approximation. For involved computations it is
+possible that several of the leading approximations are trivial, i.e.,
+'Bottom'. If the computation will eventually converge, it will generate proper
+approximation after a modest number of initial trivial approximations.
+
+The amount of added effort in each iteration is rather substantial so the
+expected precision of approximations increase very quickly.
+
+==The actual data type
+
+In fact, 'ZipList' 'Approx' is used as the implementation of infinite
+sequences of approximations, as that allows for applicative style.
+Hopefully, it is not needed to access the internal representation of
+'CReal' directly.
 -}
 type CReal = ZipList Approx
 
@@ -260,10 +292,12 @@ showInexactA base b i f e =
               then ""
               else "." ++ frac ++ "~"
 
+-- |Convert an approximation from centred form to end-point form.
 toEDI :: Approx -> EDI
 toEDI (Approx m e s) = Interval.Interval (Finite ((m-e):^s)) (Finite ((m+e):^s))
 toEDI _ = Interval.Interval NegInf PosInf
 
+-- |Convert an approximation in end-point form to a centred form.
 fromEDI :: EDI -> Approx
 fromEDI (Interval.Interval (Finite l) (Finite u)) =
     let a@(m:^s) = Interval.average l u
@@ -275,43 +309,56 @@ fromEDI (Interval.Interval (Finite l) (Finite u)) =
 fromEDI _ = Bottom
 
 -- Interval operations
+-- |Gives the lower bound of an approximation as an 'Extended' 'Dyadic' number.
 lowerBound :: Approx -> Extended Dyadic
 lowerBound (Approx m e s) = Finite ((m-e):^s)
 lowerBound Bottom = NegInf
 
+-- |Gives the upper bound of an approximation as an 'Extended' 'Dyadic' number.
 upperBound :: Approx -> Extended Dyadic
 upperBound (Approx m e s) = Finite ((m+e):^s)
 upperBound Bottom = PosInf
 
-centre :: Approx -> Dyadic
-centre (Approx m _ s) = (m:^s)
-centre _ = undefined
+-- |Gives the mid-point of an approximation as a 'Maybe' 'Dyadic' number.
+centre :: Approx -> Maybe Dyadic
+centre (Approx m _ s) = Just (m:^s)
+centre _ = Nothing
 
-radius :: Approx -> Dyadic
-radius (Approx _ e s) = e:^s
-radius _ = undefined
+-- |Gives the radius of an approximation as a 'Dyadic' number. Currently a
+-- partial function. Should be made to return an 'Extended' 'Dyadic'.
+radius :: Approx -> Extended Dyadic
+radius (Approx _ e s) = Finite (e:^s)
+radius _ = PosInf
 
+-- |Gives the lower bound of an approximation as an 'Extended' 'Dyadic' number.
 diameter :: Approx -> Extended Dyadic
 diameter (Approx _ e s) = Finite $ 2 * (e:^s)
 diameter _ = PosInf
 
+-- |Returns 'True' if the approximation is exact, i.e., it's diameter is 0.
 exact :: Approx -> Bool
 exact (Approx _ 0 _) = True
 exact _ = False
 
+-- |Checks if a number is approximated by an approximation, i.e., if it
+-- belongs to the interval encoded by the approximation.
 approximatedBy :: Real a => a -> Approx -> Bool
 _ `approximatedBy` Bottom = True
 r `approximatedBy` d =
     let r' = toRational r
     in toRational (lowerBound d) <= r' && r' <= toRational (upperBound d)
 
+-- |A partial order on approximations. The first approximation is better than
+-- the second if it is a sub-interval of the second.
 better :: Approx -> Approx -> Bool
 d `better` e = lowerBound d >= lowerBound e &&
                upperBound d <= upperBound e
 
+-- |Turns a 'Dyadic' number into an exact approximation.
 fromDyadic :: Dyadic -> Approx
 fromDyadic (m:^s) = Approx m 0 s
 
+-- |Two approximations are equal if they encode the same interval.
 instance Eq Approx where
     (Approx m e s) == (Approx n f t)
         | s >= t = let k = s-t
@@ -321,6 +368,8 @@ instance Eq Approx where
     Bottom == Bottom = True
     _ == _ = False
 
+-- |Not a sensible instance. Just used to allow to allow enumerating integers
+-- using \'..\' notation.
 instance Enum Approx where
     toEnum n = Approx (fromIntegral n) 0 0
     fromEnum (Approx m _ s) = fromIntegral $ shift m s
@@ -371,14 +420,20 @@ instance Num Approx where
     signum Bottom = Approx 0 1 0
     fromInteger i = Approx i 0 0
 
+-- |Convert a rational number into an approximation of that number with
+-- 'Precision' bits correct after the binary point.
 toApprox :: Precision -> Rational -> Approx
 toApprox t r = Approx (2 * round (r*2^^t)) 1 (-t - 1)
 
--- |Not a proper Fractional type as Approx are intervals
+-- |Not a proper Fractional type as Approx are intervals.
 instance Fractional Approx where
     fromRational = toApprox defaultPrecision
     recip = recipA defaultPrecision
 
+-- |Compute the reciprocal of an approximation. The number of bits after the
+-- binary point is bounded by the 'Precision' argument if the input is exact.
+-- Otherwise, a good approximation with essentially the same significance as
+-- the input will be computed.
 recipA :: Precision -> Approx -> Approx
 recipA _ Bottom = Bottom
 recipA t (Approx m e s)
@@ -402,6 +457,7 @@ recipA t (Approx m e s)
     --                        (-s-s')
     | otherwise   = Bottom
 
+-- |Divide an approximation by an integer.
 divAInteger :: Approx -> Integer -> Approx
 divAInteger Bottom _ = Bottom
 divAInteger (Approx m e s) n =
@@ -410,6 +466,7 @@ divAInteger (Approx m e s) n =
              (ceiling (unsafeShiftL e t % n))
              s
 
+-- |Compute the modulus of two approximations.
 modA :: Approx -> Approx -> Approx
 modA (Approx m e s) (Approx n f t) =
     let r = min s t
@@ -418,6 +475,9 @@ modA (Approx m e s) (Approx n f t) =
     in Approx m' e' r
 modA _ _ = Bottom
 
+-- |Compute the integer quotient (although returned as an 'Approx' since it
+-- may be necessary to return 'Bottom' if the integer quotient can't be
+-- determined) and the modulus as an approximation of two approximations.
 divModA :: Approx -> Approx -> (Approx, Approx)
 divModA (Approx m e s) (Approx n f t) =
     let r = min s t
@@ -426,7 +486,7 @@ divModA (Approx m e s) (Approx n f t) =
     in (fromIntegral d, Approx m' e' r)
 divModA _ _ = (Bottom, Bottom)
 
--- |Not a proper Ord type as Approx are intervals
+-- |Not a proper Ord type as Approx are intervals.
 instance Ord Approx where
     compare (Approx m e s) (Approx n f t)
         | abs ((m:^s)-(n:^t)) > (e:^s)+(f:^t) = compare (m:^s) (n:^t)
@@ -443,23 +503,33 @@ instance PartialOrd Approx where
               f GreaterThan = Just GT
               f _ = Nothing
 
+-- |The 'toRational' function is partial since there is no good rational
+-- number to return for the trivial approximation 'Bottom'.
 instance Real Approx where
     toRational (Approx m e s) = approxRational
                                   (toRational (m:^s))
                                   (toRational (e:^s))
     toRational _ = undefined
 
-toDoubleA :: Approx -> Double
-toDoubleA = fromRational . toRational . centre
+-- |Convert the centre of an approximation into a 'Maybe' 'Double'.
+toDoubleA :: Approx -> Maybe Double
+toDoubleA = fmap (fromRational . toRational) . centre
 
+-- |Convert an approximation to in interval with 'Double' end-points. Warning:
+-- This is a partial function, calling it on 'Bottom' will give a run-time
+-- error.
 toDoubleA2 :: Approx -> Interval.Interval Double
 toDoubleA2 = fmap (fromRational . toRational) . toEDI
 
+-- |Computes the precision of an approximation. This is roughly the number of
+-- correct bits after the binary point.
 precision :: Approx -> Extended Precision
 precision (Approx _ 0 _) = PosInf
 precision (Approx _ e s) = Finite $ - s - (integerLog2 e) - 1
 precision Bottom         = NegInf
 
+-- |Computes the significance of an approximation. This is roughly the number
+-- of significant bits.
 significance :: Approx -> Extended Int
 significance (Approx _ 0 _) = PosInf
 significance (Approx 0 _ _) = NegInf
@@ -468,6 +538,20 @@ significance (Approx m e _) =
     Finite $ (integerLog2 (abs m)) - (integerLog2 (e-1)) - 1
 significance Bottom         = NegInf
 
+{-|
+This function bounds the error term of an 'Approx'.
+
+If @y = boundErrorTerm x@ then it is always the case that @x `'better'` y@.
+
+Consider an approximation @Approx m e s@. If @e@ has /k/ bits then that
+essentially expresses that the last /k/ bits of @m@ are unknown or garbage. By
+scaling both @m@ and @e@ so that @e@ has a small number of bits we save on
+memory space and computational effort to compute operations. On the other
+hand, if we remove too many bits in this way, the shift in the mid-point of the
+interval becomes noticable and it may adversely affect convergence speed of
+computations. The number of bits allowed for @e@ after the operation is
+determined by the constant 'errorBits'.
+-}
 boundErrorTerm :: Approx -> Approx
 boundErrorTerm Bottom = Bottom
 boundErrorTerm a@(Approx m e s)
@@ -482,6 +566,16 @@ boundErrorTerm a@(Approx m e s)
            then Approx (m'+1) e' (s+k)
            else Approx m'     e' (s+k)
 
+{-|
+Limits the size of an approximation by restricting how much precision an
+approximation can have.
+
+This is accomplished by restricting the exponent of the approximation from
+below. In other words, we limit the precision possible.
+
+It is conceivable to limit the significance of an approximation rather than
+the precision. This would be an interesting research topic.
+-}
 limitSize :: Precision -> Approx -> Approx
 limitSize _ Bottom = Bottom
 limitSize l a@(Approx m e s)
@@ -492,37 +586,52 @@ limitSize l a@(Approx m e s)
     | otherwise = a
     where k = (-s)-l
 
+-- |Throws an exception if the precision of an approximation is not larger
+-- than the deafult minimum.
 checkPrecisionLeft :: Approx -> Approx
 checkPrecisionLeft a
         | precision a > pure defaultPrecision = a
         | otherwise = throw $ LossOfPrecision
 
+-- |Bounds the error term and limits the precision of an approximation.
 limitAndBound :: Precision -> Approx -> Approx
 limitAndBound limit =
     limitSize limit . boundErrorTerm
 
+-- |Given a list of polynom coefficients and a value this evaluates the
+-- polynomial at that value.
+--
+-- Should give a tighter bound on the result since we reduce the dependency
+-- problem.
 poly :: [Approx] -> Approx -> Approx
 poly [] _ = 0
 poly _ Bottom = Bottom
 poly as x =
     let --poly' :: [Dyadic] -> Dyadic -> Dyadic
         poly' as' x' = sum . zipWith (*) as' $ pow x'
-        ms = map centre as
-        (m':^s) = poly' ms (centre x)
+        ms = map ((maybe (error "Can't compute poly with Bottom coefficients") id) . centre) as
+        (Just c) = centre x
+        (m':^s) = poly' ms c
         ds = zipWith (*) (tail as) (map fromIntegral ([1,2..] :: [Int]))
         (Finite b) = upperBound . abs $ poly' ds x
-        (e':^_) = radius x * b
+        (Finite (e':^_)) = fmap (b*) $ radius x
         -- exponent above will be same as s
     in Approx m' e' s
 
+-- |Gives a list of powers of a number, i.e., [1,x,x^2,...].
 pow :: (Num a) => a -> [a]
 pow x = iterate (* x) 1
 
+-- |Computes lists of binomial coefficients. [[1], [1,1], [1,2,1], [1,3,3,1], ...]
 binomialCoefficients :: (Num a) => [[a]]
 binomialCoefficients =
     let f ss = 1 : zipWith (+) ss (tail ss) ++ [1]
     in iterate f [1]
 
+-- |Computes powers of approximations. Should give tighter intervals than the
+-- general 'pow' since take the dependency problem into account. However, so
+-- far benchmarking seems to indicate that the cost is too high, but this may
+-- depend on the application.
 powers :: Approx -> [Approx]
 powers (Approx m e s) =
     let ms = pow m
@@ -1085,7 +1194,7 @@ ok d a = if precision a > fromIntegral d then a else Bottom
 require :: Int -> CReal -> Approx
 require d x = head . dropWhile (== Bottom) . getZipList $ ok d <$> x
 
-toDouble :: CReal -> Double
+toDouble :: CReal -> Maybe Double
 toDouble = toDoubleA . require (54+errorBits)
 
 transposeZipList :: [ZipList a] -> ZipList [a]

@@ -139,6 +139,30 @@ issue.
 The 'Integer' data type is unbonded, but is, of course, bounded by the
 available memory available in the computer. No attempt has been made to check
 for exhausted memory.
+
+== Approximations as a Domain
+
+Ordered by reverse inclusion the dyadic intervals encoded by the 'Approx'
+approximations (including 'Bottom') constitute the compact elements of a Scott
+domain /D/. (It is a substructure of the (algebraic) interval domain.)
+We will identify our approximations with the compact elements of /D/.
+
+Increasing sequences in /D/ have suprema. A sequence /converges/ if the length
+of the approximations tend to zero. The supremum of a converging sequence is a
+singleton set containing a real number. Let ρ be the map taking a converging
+sequence to the unique real number in the supremum. The computations on
+(computable) real numbers is via this representation map ρ.
+
+There is no check that the sequences we have are in fact increasing, but we
+are assuming that all sequences are pairwise consistent. We can thus create an
+increasing sequence by considering the sequence of finite suprema. For
+correctness, we have to ensure that all operations done on consistent
+sequences result in consistent sequences. If non-consistent sequences are
+somehow input we can make no guarantees at all about the computed value.
+
+Note, that we cannot ensure that converging sequences are mapped to converging
+sequences because of properties of computable real arithmetic. In particular,
+at any discuntinuity, it is impossible to compute a converging sequence.
 -}
 data Approx = Approx Integer Integer Int
             | Bottom

@@ -189,10 +189,12 @@ have a non-empty intersection. However, there is no check that this is
 actually the case.
 
 If the diameter of the approximations tend to zero we say that the sequences
-converges to the unique real number in the intersection of all intervals. Some
-operations on computable reals are partial, notably equality and ordering. A
-consequence of this is that there is no guarantee that a computable real will
-converge.
+converges to the unique real number in the intersection of all intervals.
+Given the domain /D/ of approximations described in 'Approx', we have a
+representation (a retraction) ρ from the converging sequences in /D/ to ℝ.
+Some operations on computable reals are partial, notably equality and
+ordering. A consequence of this is that there is no guarantee that a
+computable real will converge.
 
 For the /n/-th element in the sequence there is a bound on how much effort is
 put into the computation of the approximation. For involved computations it is
@@ -227,13 +229,20 @@ defaultPrecision :: Precision
 defaultPrecision = 31
 
 {-|
-Gives a decimal representation of an approximation. It tries to give as many decimal digits as possible given the precision of the approximation. The representation may be wrong by 1 ulp (unit in last place). If the value is not exact the representation will be followed by @~@.
+
+Gives a decimal representation of an approximation. It tries to give as many
+decimal digits as possible given the precision of the approximation. The
+representation may be wrong by 1 ulp (unit in last place). If the value is not
+exact the representation will be followed by @~@.
 
 The representation is not always intuitive:
 >>> showA (Approx 1 1 0)
 "1.~"
 
-The meaning of the above is that it is 1, but then the added @~@ (which must be after the decimal point) means that the last position may be off by 1, i.e., it could be down to 0 or up to 2. And [0,2] is indeed the range encoded by the above approximation.
+The meaning of the above is that it is 1, but then the added @~@ (which must
+be after the decimal point) means that the last position may be off by 1,
+i.e., it could be down to 0 or up to 2. And [0,2] is indeed the range encoded
+by the above approximation.
 -}
 showA :: Approx -> String
 showA = showInBaseA 10
@@ -575,6 +584,14 @@ hand, if we remove too many bits in this way, the shift in the mid-point of the
 interval becomes noticable and it may adversely affect convergence speed of
 computations. The number of bits allowed for @e@ after the operation is
 determined by the constant 'errorBits'.
+
+== Domain interpretation and verification
+
+For this implementation to be correct it is required that this function is
+below the identity on the domain /D/ of 'Approx'. For efficiency it is
+desirable to be as close to the identity as possible.
+
+This function will map a converging sequence to a converging sequence.
 -}
 boundErrorTerm :: Approx -> Approx
 boundErrorTerm Bottom = Bottom
@@ -601,6 +618,17 @@ below. In other words, we limit the precision possible.
 
 It is conceivable to limit the significance of an approximation rather than
 the precision. This would be an interesting research topic.
+
+== Domain interpretation and verification
+
+For this implementation to be correct it is required that this function is
+below the identity on the domain /D/ of 'Approx'. For efficiency it is
+desirable to be as close to the identity as possible.
+
+This function will NOT map a converging sequence to a converging sequence for
+a fixed precision argument. However, if the function is applied with
+increasing precision for a converging sequence, then this will give a
+converging sequence.
 -}
 limitSize :: Precision -> Approx -> Approx
 limitSize _ Bottom = Bottom
@@ -672,6 +700,16 @@ powers (Approx m e s) =
     in zipWith g (iterate (+s) 0) $ map (sumAlt . f) binomialCoefficients
 powers _ = repeat Bottom
 
+{-|
+Compute the square root of an approximation.
+
+This and many other operations on approximations is just a reimplementation of
+interval arithmetic, with an extra argument limiting the effort put into the
+computation. This is done via the precision argument.
+
+The resulting approximation should approximate the image of every point in the
+input approximation.
+-}
 sqrtA :: Precision -> Approx -> Approx
 sqrtA _ Bottom = Bottom
 sqrtA k a@(Approx m e s)
@@ -688,6 +726,9 @@ sqrtA k a@(Approx m e s)
                       (n':^t') = sqrtD' s' ((m+e):^s) l
                   in fromEDI $ Interval.Interval (Finite ((n-1):^t)) (Finite ((n'+1):^t'))
 
+-- |Square an approximation. Gives the exact image interval, as opposed to
+-- multiplicating a number with itself which will give a slightly larger
+-- interval due to the dependency problem.
 sqrA :: Approx -> Approx
 sqrA Bottom = Bottom
 sqrA (Approx m e s) = Approx (m^(2 :: Int) + e^(2 :: Int)) (2*abs m*e) (2*s)

@@ -1,4 +1,8 @@
 {-# LANGUAGE FlexibleInstances #-}
+{-| Intervals do not satisfy the Ord type class. This is a ordering
+relation that encodes all ways two intervals may situated in relation to each
+other.
+-}
 module Data.CDAR.POrd where
 
 {- 
@@ -8,9 +12,11 @@ intervals Apart is not needed, but if used for interval valued functions, then
 it separate.
 -}
 
+-- | All possibilies of relations between two intervals.
 data IntervalOrdering = Equal | Same | Within | Include | Overlap | LessThan | GreaterThan | Apart
                         deriving (Show, Read, Eq, Ord, Enum, Bounded)
 
+-- | Interval data types may implement this class to allow that to compare intervals.
 class IntervalOrd a where
     intervalCompare :: a -> a -> IntervalOrdering
     equal :: a -> a -> Bool
@@ -30,8 +36,10 @@ class IntervalOrd a where
     a `greaterThan` b = GreaterThan == intervalCompare a b
     a `apart` b = LessThan <= intervalCompare a b
 
+-- | This type is a partial version of the usual 'Ordering' type.
 type POrdering = Maybe Ordering
 
+-- | Type class with partial comparison operations.
 class PartialOrd a where
     partialCompare :: a -> a -> Maybe Ordering
     partialLT :: a -> a -> Maybe Bool

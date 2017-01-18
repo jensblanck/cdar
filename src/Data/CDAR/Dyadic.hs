@@ -2,7 +2,7 @@
    'a * 2 ^ s' is 'a :^ s'. The exponent 's' is an 'Int', but the 'a' is an
    arbitrary 'Integer'.
 -}
-module Data.CDAR.Dyadic (Dyadic(..),normalise,shiftD,sqrtD,sqrtD',piMachinD,piBorweinD,ln2D,agmD,theta2D,theta3D,lnBigD) where
+module Data.CDAR.Dyadic (Dyadic(..),normalise,shiftD,sqrtD,sqrtD',piMachinD,piBorweinD,ln2D) where
 
 import Data.Ratio
 import Data.Bits
@@ -44,7 +44,7 @@ instance Num Dyadic where
 instance Real Dyadic where
     toRational (a :^ s) = (toRational a)*2^^s
 
--- Shift a dyadic number to a given base and round in case of right shifts.
+-- | Shift a dyadic number to a given base and round in case of right shifts.
 shiftD :: Int -> Dyadic -> Dyadic
 shiftD t (m:^s) =
     if t <= s
@@ -75,6 +75,7 @@ sqrtD t x = sqrtD' t x $ initSqrtD x
                             then (n+8):^s'
                             else (n+4):^s'
 
+-- |Square root with initial approximation as third argument.
 sqrtD' :: Int -> Dyadic -> Dyadic -> Dyadic
 sqrtD' t x@(m:^_) y
     | m == 0 = 0:^0
@@ -96,6 +97,7 @@ divD' p a b = let (m:^_) = shiftD (2*p) a
                   (n:^_) = shiftD p b
               in round (m%n) :^ p
 
+-- |Compute dyadic values close to pi by Machin's formula.
 piMachinD :: Int -> Dyadic
 piMachinD t = let t' = t-10-integerLog2 (fromIntegral (abs t))
                   a = map ((:^t') . round . (bit (-t') %)) $ iterate ((-25)*) (5 :: Integer)
@@ -105,6 +107,7 @@ piMachinD t = let t' = t-10-integerLog2 (fromIntegral (abs t))
                   e = takeWhile (/= 0) . map (shiftD t') $ zipWith (*) b c
               in shiftD t $ 4 * (4 * sum d - sum e)
 
+-- |Compute dyadic values close to pi by Borwein's formula.
 piBorweinD :: Int -> Dyadic
 piBorweinD t = let t' = t-10-integerLog2 (fromIntegral (abs t))
                    s = sqrtD t' 2
@@ -117,6 +120,7 @@ piBorweinD t = let t' = t-10-integerLog2 (fromIntegral (abs t))
                         a' = shiftD l $ a*(1+y')^(4::Int)-(bit (2*k+1):^0)*y'*(1+y'+y'*y')
                     in (a',y',k+1)
 
+-- |Compute dyadic values close to ln 2.
 ln2D :: Int -> Dyadic
 ln2D t = let t' = t - 10 - 2 * integerLog2 (fromIntegral (abs t))
              a = map ((:^t') . round . (bit (-t') %)) $ iterate (3*) (3 :: Integer)
@@ -126,7 +130,7 @@ ln2D t = let t' = t - 10 - 2 * integerLog2 (fromIntegral (abs t))
              e = takeWhile (/= 0) . map (shiftD t') $ zipWith (*) d c
          in shiftD t $ sum e
              
-
+{-
 agmD :: Int -> Dyadic -> Dyadic -> Dyadic
 agmD t a b = let t' = t - 5
                  agmStep (c,d) = ((1:^(-1)) * (c+d), sqrtD t' (c*d))
@@ -153,7 +157,7 @@ lnBigD t x = let t' = t-10-integerLog2 (fromIntegral (abs t))
                  t3 = theta3D t' x
                  a = agmD t' (t2*t2) (t3*t3)
              in shiftD t $ divD' t' (piBorweinD t') a
-
+-}
 {-
 agm a b = let step (a,b) = (0.5 * (a+b), sqrt (a*b))
               close (a,b) = abs (a-b) < 1e-6

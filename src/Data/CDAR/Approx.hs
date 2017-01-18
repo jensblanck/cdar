@@ -68,7 +68,6 @@ module Data.CDAR.Approx (Approx(..)
                         ,atanTaylorA
                         ,piRaw
                         ,piA
-                        ,nonZeroCentred
                         ,piMachinA
                         ,piBorweinA
                         ,piAgmA
@@ -236,6 +235,7 @@ representation may be wrong by 1 ulp (unit in last place). If the value is not
 exact the representation will be followed by @~@.
 
 The representation is not always intuitive:
+
 >>> showA (Approx 1 1 0)
 "1.~"
 
@@ -735,6 +735,20 @@ sqrA (Approx m e s) = Approx (m^(2 :: Int) + e^(2 :: Int)) (2*abs m*e) (2*s)
 
 -- Binary splitting
 
+{-|
+Binary splitting summation of linearly convergent series as described in
+/'Fast multiprecision evaluation of series of rational numbers'/ by B Haible
+and T Papanikolaou, ANTS-III Proceedings of the Third International Symposium
+on Algorithmic Number Theory Pages 338-350, 1998.
+
+The main idea is to balance the computations so that more operations are
+performed with values of similar size. Using the underlying fast
+multiplication algorithms this will give performance benefits.
+
+The algorithm parallelises well. However, a final division is needed at the
+end to compute /T\/BQ/ which amount to a substantial portion of the
+computation time.
+-}
 abpq :: Num a => [Integer] -> [Integer] -> [a] -> [a] -> Int -> Int -> (a, a, Integer, a)
 abpq as bs ps qs n1 n2
     | n == 1 = (ps !! n1, qs !! n1, bs !! n1, fromIntegral (as !! n1) * ps !! n1)
@@ -761,25 +775,35 @@ abpq as bs ps qs n1 n2
 ones :: Num a => [a]
 ones = repeat 1
 
+{-|
+Computes the list [lg 0!, lg 1!, lg 2!, ...].
+-}
 -- To be changed to Stirling formula if that is faster
 log2Factorials :: [Int]
 log2Factorials = map integerLog2 . scanl1 (*) $ 1:[1..]
 
 -- Straighforward Taylor summation
 
+{-|
+Computes a sum of the form ∑ aₙ/qₙ where aₙ are approximations and qₙ are
+integers. Terms are added as long as they are larger than the than the current
+precision bound. The sum is adjusted for the tail of the series. For this to
+be correct we need the the terms to converge geometrically to 0 by a factor of
+at least 2.
+-}
 taylor :: Precision -> [Approx] -> [Integer] -> Approx
 taylor res as qs =
   let res' = res + errorBits
       f a q = limitAndBound res' $ a * recipA res' (fromIntegral q)
-      g Bottom = False
-      g (Approx m _ _) = m /= 0 --abs m >= bit (s + res')
       bs = zipWith f as qs
-      (cs,(d:_)) = span g bs
+      (cs,(d:_)) = span nonZeroCentredA bs
   in fudge (sum cs) d
 
+-- | A list of factorial values.
 fac :: Num a => [a]
 fac = map fromInteger $ 1 : scanl1 (*) [1..]
 
+-- | A list of the factorial values of odd numbers.
 oddFac :: Num a => [a]
 oddFac = let f (_:x:xs) = x:f xs
              f _ = error "Impossible"
@@ -792,6 +816,7 @@ evenFac = let f (x:_:xs) = x:f xs
           in f fac
 -}
 
+-- | Checks if the centre of an approximation is not 0.
 nonZeroCentredA :: Approx -> Bool
 nonZeroCentredA Bottom = False
 nonZeroCentredA (Approx 0 _ _) = False
@@ -799,6 +824,14 @@ nonZeroCentredA _ = True
 
 -- This version is faster especially far smaller precision.
 
+{-|
+Computes the sum of the form ∑ aₙxⁿ where aₙ and x are approximations.
+
+Terms are added as long as they are larger than the than the current precision
+bound. The sum is adjusted for the tail of the series. For this to be correct
+we need the the terms to converge geometrically to 0 by a factor of at least
+2.
+-}
 taylorA :: Precision -> [Approx] -> Approx -> Approx
 taylorA res as x =
   sum . takeWhile nonZeroCentredA . map (limitAndBound res) $ zipWith (*) as (pow x)
@@ -806,10 +839,18 @@ taylorA res as x =
 {- Exponential computed by standard Taylor expansion after range reduction.
 -}
 
--- Is faster for small approximations < ~2000 bits.
+{-|
+The exponential of an approximation. There are three implementation using
+Taylor expansion here. This is just choosing between them.
+
+More thorough benchmarking would be desirable.
+
+Is faster for small approximations < ~2000 bits.
+-}
 expA :: Precision -> Approx -> Approx
 expA = expTaylorA'
 
+-- | Exponential by binary splitting summation of Taylor series.
 expBinarySplittingA :: Precision -> Approx -> Approx
 expBinarySplittingA _ Bottom = Bottom
 expBinarySplittingA res a@(Approx m e s) =
@@ -831,6 +872,7 @@ expBinarySplittingA res a@(Approx m e s) =
       ss = iterate (boundErrorTerm . sqrA) $ fudge (t * recipA (res+r) (fromIntegral b*q)) nextTerm
   in ss !! r
 
+-- | Exponential by summation of Taylor series.
 expTaylorA :: Precision -> Approx -> Approx
 expTaylorA _ Bottom = Bottom
 expTaylorA res (Approx m e s) =
@@ -846,6 +888,7 @@ expTaylorA res (Approx m e s) =
             (scanl1 (*) $ 1:[1..])
   in (!! r) . iterate (boundErrorTerm . sqrA) $ t
    
+-- | Exponential by summation of Taylor series.
 expTaylorA' :: Precision -> Approx -> Approx
 expTaylorA' _ Bottom = Bottom
 expTaylorA' res (Approx m e s) =
@@ -864,12 +907,20 @@ expTaylorA' res (Approx m e s) =
 {- Logarithms computed by ln x = 2*atanh ((x-1)/(x+1)) after range reduction.
 -}
 
--- Binary splitting is faster than Taylor. AGM should be used over ~1000 bits.
+{-|
+
+Computing the logarithm of an approximation. This is chooses the fastest implementation.
+
+More thorough benchmarking is desirable.
+
+Binary splitting is faster than Taylor. AGM should be used over ~1000 bits.
+-}
 logA :: Precision -> Approx -> Approx
 logA res = if res < 500
            then logBinarySplittingA res
            else logAgmA (-res)
 
+-- | Logarithm by binary splitting summation of Taylor series.
 logBinarySplittingA :: Precision -> Approx -> Approx
 logBinarySplittingA _ Bottom = Bottom
 logBinarySplittingA res a@(Approx m e s) =
@@ -892,6 +943,7 @@ logBinarySplittingA res a@(Approx m e s) =
             nextTerm = recipA (res') 5 ^^ (2*n+1)
         in boundErrorTerm $ fudge (t * recipA res (fromIntegral b*q) + fromIntegral r * log2A (-res)) nextTerm
 
+-- | Logarithm by summation of Taylor series.
 logTaylorA :: Precision -> Approx -> Approx
 logTaylorA _ Bottom = Bottom
 logTaylorA res (Approx m e s) =
@@ -912,15 +964,18 @@ logTaylorA res (Approx m e s) =
 
 -- Sine computed by Taylor expansion after 2 step range reduction.
 
+-- | Computes sine by summation of Taylor series after two levels of range reductions.
 sinTaylorA :: Precision -> Approx -> Approx
 sinTaylorA res = sinTaylorRed2A res . sinTaylorRed1A res
 
+-- | First level of range reduction for sine. Brings it into the interval [-π/2,π/2].
 sinTaylorRed1A :: Precision -> Approx -> Approx
 sinTaylorRed1A res a = 
   let _pi = piA res
-      halfPi = _pi * (Approx 1 0 (-1))
-  in (subtract halfPi) . abs . (_pi -) . abs . (subtract halfPi) . modA a $ 2*_pi
+      _halfPi = _pi * (Approx 1 0 (-1))
+  in (subtract _halfPi) . abs . (_pi -) . abs . (subtract _halfPi) . modA a $ 2*_pi
 
+-- | Second level of range reduction for sine.
 sinTaylorRed2A :: Precision -> Approx -> Approx
 sinTaylorRed2A _ Bottom = Bottom
 sinTaylorRed2A res a = 
@@ -932,15 +987,21 @@ sinTaylorRed2A res a =
       step x = boundErrorTerm $ x * (3 - 4 * sqrA x)
   in limitAndBound res . step . step . step . step . boundErrorTerm $ t * a' --(!! k) . iterate (step) . boundErrorTerm $ t * a'
 
+-- | Computes the sine of an approximation. Chooses the best implementation.
 sinA :: Precision -> Approx -> Approx
 sinA = sinTaylorA
 
+-- | Computes the cosine of an approximation. Chooses the best implementation.
 cosA :: Precision -> Approx -> Approx
 cosA res x = sinA res ((Approx 1 0 (-1)) * piA res - x)
 
+-- | Computes the arc tangent of an approximation. Chooses the best implementation.
 atanA :: Precision -> Approx -> Approx
 atanA = atanBinarySplittingA
 
+-- | Computes the sine of an approximation by binary splitting summation of Taylor series.
+--
+-- Begins by reducing the interval to [0,π/4].
 sinBinarySplittingA :: Precision -> Approx -> Approx
 sinBinarySplittingA _ Bottom = Bottom
 sinBinarySplittingA res a =
@@ -959,6 +1020,9 @@ sinBinarySplittingA res a =
          7 -> - sinInRangeA res (_pi * fromDyadic (1:^(-2)) - a2)
          _ -> error "Impossible"
 
+-- | Computes the cosine of an approximation by binary splitting summation of Taylor series.
+--
+-- Begins by reducing the interval to [0,π/4].
 cosBinarySplittingA :: Precision -> Approx -> Approx
 cosBinarySplittingA _ Bottom = Bottom
 cosBinarySplittingA res a =
@@ -977,6 +1041,7 @@ cosBinarySplittingA res a =
          7 -> cosInRangeA res (_pi * fromDyadic (1:^(-2)) - a2)
          _ -> error "Impossible"
 
+-- | Computes the arc tangent of an approximation by binary splitting summation of Taylor series.
 atanBinarySplittingA :: Precision -> Approx -> Approx
 atanBinarySplittingA _ Bottom = Bottom
 atanBinarySplittingA res a =
@@ -994,6 +1059,7 @@ atanBinarySplittingA res a =
       nextTerm = Approx 1 0 (-2*n)
   in boundErrorTerm . (8*) $ fudge (t * recipA res (fromIntegral b*q)) nextTerm
 
+-- | Computes the arc tangent of an approximation by summation of Taylor series.
 atanTaylorA :: Precision -> Approx -> Approx
 atanTaylorA _ Bottom = Bottom
 atanTaylorA res a =
@@ -1037,6 +1103,10 @@ cosInRangeA res a =
         nextTerm = fromDyadic (1:^(-res))
     in boundErrorTerm $ fudge (t * recipA res (fromIntegral b*q)) nextTerm
 
+{-|
+Computes a sequence of approximations of π using binary splitting summation of
+Ramanujan's series. See Haible and Papanikolaou 1998.
+-}
 piRaw :: [Approx]
 piRaw = unfoldr f (1, (1, 1, 1, 13591409))
     where as = [13591409,13591409+545140134..]
@@ -1054,11 +1124,14 @@ piRaw = unfoldr f (1, (1, 1, 1, 13591409))
                     , (i2, (pl * pr, ql * qr, bl * br, fromIntegral br * qr * tl + fromIntegral bl * pl * tr))
                     )
 
+-- | Computes an 'Approx' of π of the given precision.
 piA :: Precision -> Approx
 piA res = limitAndBound res . head $ dropWhile ((< pure res) . precision) piRaw
 
--- Second argument is noice to be added to first argument.
--- Used to allow for the error term when truncating a series.
+{-|
+Second argument is noice to be added to first argument. Used to allow for the
+error term when truncating a series.
+-}
 fudge :: Approx -> Approx -> Approx
 fudge (Approx m 0 s) (Approx m' e' s') =
   Approx (m `shift` (s - s')) (abs m' + e' + 1) s'
@@ -1068,11 +1141,6 @@ fudge (Approx m e s) (Approx m' e' s') =
 fudge _ _  = Bottom
 
 --
-
-nonZeroCentred :: Approx -> Bool
-nonZeroCentred Bottom = False
-nonZeroCentred (Approx 0 _ _) = False
-nonZeroCentred _ = True
 
 piMachinA :: Precision -> Approx
 piMachinA t = let (m:^s) = piMachinD (-t) in Approx m 1 s
@@ -1275,7 +1343,7 @@ polynomial as x =
 
 taylorCR :: [CReal] -> CReal -> CReal
 taylorCR as x =
-    (\as' x' l -> sum . takeWhile nonZeroCentred . map (limitAndBound l) $ zipWith (*) as' (pow x'))
+    (\as' x' l -> sum . takeWhile nonZeroCentredA . map (limitAndBound l) $ zipWith (*) as' (pow x'))
     <$> transposeZipList as <*> x <*> resources
 
 epsilon :: CReal

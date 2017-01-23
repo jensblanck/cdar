@@ -1142,12 +1142,18 @@ fudge _ _  = Bottom
 
 --
 
+-- | Compute π using Machin's formula. Lifted from computation on dyadic numbers.
 piMachinA :: Precision -> Approx
 piMachinA t = let (m:^s) = piMachinD (-t) in Approx m 1 s
 
+-- | Compute π using AGM as described in Borwein and Borwein's book 'Pi and
+-- the AGM'. Lifted from computation on dyadic numbers.
 piBorweinA :: Precision -> Approx
 piBorweinA t = let (m:^s) = piBorweinD (-t) in Approx m 1 s
 
+
+-- | Compute π using AGM as described in Borwein and Borwein's book 'Pi and
+-- the AGM'.
 piAgmA :: Precision -> Approx -> Approx
 piAgmA t x = let t' = t - 10
                  a = 1
@@ -1167,11 +1173,14 @@ piAgmA t x = let t' = t - 10
                  _pi = boundErrorTerm $ unionApprox (2*(snd (last ss))*e) (2*(fst (last ss))*e)
              in _pi
                 
+-- | Compute approximations of ln 2. Lifted from computation on dyadic numbers.
 log2A :: Precision -> Approx
 log2A t = let (m:^s) = ln2D t in Approx m 1 s
 
 -- AGM
 
+-- | Compute logarithms using AGM as described in Borwein and Borwein's book 'Pi and
+-- the AGM'. An approximation of pi is produced as a by-product.
 lnSuperSizeUnknownPi :: Precision -> Approx -> (Approx,Approx)
 lnSuperSizeUnknownPi t x =
     let t' = t - 10
@@ -1198,6 +1207,8 @@ lnSuperSizeUnknownPi t x =
         _pi = boundErrorTerm $ unionApprox (2*bn*e) (2*an*e)
     in (r,_pi) --[a,b,c,d,b2,b3,b4,l,u,r,e,pi]
 
+-- | Compute logarithms using AGM as described in Borwein and Borwein's book 'Pi and
+-- the AGM'. An approximation of pi is needed as an extra argument.
 lnSuperSizeKnownPi :: Precision -> Approx -> Approx -> Approx
 lnSuperSizeKnownPi t _pi x =
     let t' = t - 10
@@ -1239,6 +1250,8 @@ lnSmall t x@(Approx m _ s) =
         log2k = lnSuperSizeKnownPi (-t') _pi $ 2^k
     in logx2k - log2k
 
+-- | Compute logarithms using AGM as described in Borwein and Borwein's book 'Pi and
+-- the AGM'.
 logAgmA :: Precision -> Approx -> Approx
 logAgmA t x
     | significance x < pure 5     = Bottom
@@ -1248,6 +1261,7 @@ logAgmA t x
     | upperBound x < pure 3       = lnSmall t x
     | otherwise                   = error "Logic fault in logAgmA."
 
+-- | Find the hull of two approximations.
 unionApprox :: Approx -> Approx -> Approx
 unionApprox Bottom _ = Bottom
 unionApprox _ Bottom = Bottom
@@ -1268,6 +1282,8 @@ agm1 = zipWith (*) [Approx 1 0 i | i <- [-1,0..]] . map (uncurry sqDiff)
 agm2 :: [Approx] -> Approx
 agm2 xs = sum (init xs) + unionApprox 0 (2 * last xs)
 
+-- | Compute logarithms using AGM as described in Borwein and Borwein's book 'Pi and
+-- the AGM'.
 agmLn :: Precision -> Approx -> Approx
 agmLn t x = let t' = t - 10
                 a = 1
@@ -1322,25 +1338,36 @@ instance Fractional CReal where
 instance Real CReal where
     toRational = toRational . require 40
 
+-- | Shows the internal representation of a 'CReal'. The first /n/
+-- approximations are shown on separate lines.
 showCRealN :: Int -> CReal -> String
 showCRealN n = concat . intersperse "\n" . map showA . take n . getZipList
 
+-- | Check that an approximation has at least /d/ bits of precision. This is
+-- used to bail out of computations where the size of approximation grow
+-- quickly.
 ok :: Int -> Approx -> Approx
 ok d a = if precision a > fromIntegral d then a else Bottom
 
+-- | Given a 'CReal' this functions finds an approximation of that number to
+-- within the precision required.
 require :: Int -> CReal -> Approx
 require d x = head . dropWhile (== Bottom) . getZipList $ ok d <$> x
 
+-- | Gives a 'Double' approximation of a 'CReal' number.
 toDouble :: CReal -> Maybe Double
 toDouble = toDoubleA . require (54+errorBits)
 
 transposeZipList :: [ZipList a] -> ZipList [a]
 transposeZipList = ZipList . transpose . map getZipList
 
+-- | Evaluate a polynomial, given as a list of its coefficients, at the given point.
 polynomial :: [CReal] -> CReal -> CReal
 polynomial as x = 
     (\as' x' l -> ok 10 . limitAndBound l $ poly as' x') <$> transposeZipList as <*> x <*> resources
 
+-- | Computes the sum of a Taylor series, given as a list of its coefficients,
+-- at the given point.
 taylorCR :: [CReal] -> CReal -> CReal
 taylorCR as x =
     (\as' x' l -> sum . takeWhile nonZeroCentredA . map (limitAndBound l) $ zipWith (*) as' (pow x'))
@@ -1349,6 +1376,8 @@ taylorCR as x =
 epsilon :: CReal
 epsilon = Approx 0 1 . negate <$> resources
 
+-- | The square root function. Lifted from square root application on 'Approx'
+-- approximations.
 sqrtCR :: CReal -> CReal
 sqrtCR x = (\a l -> ok 10 . limitAndBound l $ sqrtA (-l) a) <$> x <*> resources
 
@@ -1365,21 +1394,29 @@ atanCR x =
 --  let x2 = x^2
 --           in epsilon + x * taylor (map (1/) . alternateSign . map fromInteger $ [1,3..]) x2
 
+-- | π computed using Machin's formula. Computed directly on 'CReal'.
 piCRMachin :: CReal
 piCRMachin = 4*(4*atanCR (1/5)-atanCR (1/239))
 
+-- | π computed using Machin's formula. Computed on 'Approx' approximations.
 piMachinCR :: CReal
 piMachinCR = piMachinA . negate <$> resources
 
+-- | π computed using Borwein's formula. Computed on 'Approx' approximations.
 piBorweinCR :: CReal
 piBorweinCR = piBorweinA . negate <$> resources
 
+-- | π computed using binary splitting. Computed on 'Approx' approximations.
 piBinSplitCR :: CReal
 piBinSplitCR = limitAndBound <$> resources <*> (require <$> resources <*> ZipList (repeat (ZipList piRaw)))
 
+-- | The constant ln 2.
 ln2 :: CReal
 ln2 = log2A . negate <$> resources
 
+-- | The exponential computed using Taylor's series. Computed directly on
+-- 'CReal'. Will have poor behaviour on larger inputs as no range reduction is
+-- performed.
 expCR :: CReal -> CReal
 expCR = (+ epsilon) . taylorCR (map (1/) $ fac)
 
@@ -1397,13 +1434,20 @@ sinRangeReduction2 x = let k = (\a -> case a of
                            step z = z*(3-4*z^2)
                        in (\y' k' l -> limitAndBound l $ foldr ($) y' (replicate k' step)) <$> y <*> k <*> resources
 
+-- | The sine function computed using Taylor's series. Computed directly on
+-- 'CReal'. Will have poor behaviour on larger inputs as no range reduction is
+-- performed.
 sinCRTaylor :: CReal -> CReal
 sinCRTaylor x = let x2 = x^2
                 in epsilon + x * taylorCR (map (1/) $ alternateSign oddFac) x2
 
+-- | The sine function computed using Taylor's series. Computed directly on
+-- 'CReal'.
 sinCR :: CReal -> CReal
 sinCR = sinRangeReduction2 . sinRangeReduction
 
+-- | The cosine function computed using Taylor's series. Computed directly on
+-- 'CReal'.
 cosCR :: CReal -> CReal
 cosCR = sinCR . (halfPi -)
 

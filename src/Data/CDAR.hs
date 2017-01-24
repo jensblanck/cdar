@@ -7,7 +7,6 @@ Modules imported are:
 - "Data.CDAR.Approx"
 - "Data.CDAR.Dyadic"
 - "Data.CDAR.Extended"
-- "Data.CDAR.Interval"
 - "Data.CDAR.IntegerLog"
 - "Data.CDAR.Interval"
 - "Data.CDAR.POrd"

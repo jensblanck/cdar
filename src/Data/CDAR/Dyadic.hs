@@ -2,7 +2,7 @@
    'a * 2 ^ s' is 'a :^ s'. The exponent 's' is an 'Int', but the 'a' is an
    arbitrary 'Integer'.
 -}
-module Data.CDAR.Dyadic (Dyadic(..),normalise,shiftD,sqrtD,sqrtD',piMachinD,piBorweinD,ln2D) where
+module Data.CDAR.Dyadic (Dyadic(..),normalise,shiftD,sqrtD,sqrtD',sqrtRecD,sqrtRecD',piMachinD,piBorweinD,ln2D) where
 
 import Data.Ratio
 import Data.Bits
@@ -61,7 +61,11 @@ divD a (n:^t) = let (m:^_) = shiftD (2*t) a
    Newton-Raphson method may overestimates the square root, but the
    overestimate is bounded by 1 ulp. For example, sqrtD 0 2 will give 2,
    whereas the closest integer to the square root is 1. Need double precision
-   to guarantee correct rounding, which was not considered worthwhile. -}
+   to guarantee correct rounding, which was not considered worthwhile.
+
+   This is actually Heron's method and is no longer used in Approx as it is
+   faster to use sqrtRecD.
+-}
 sqrtD :: Int -> Dyadic -> Dyadic
 sqrtD t x = sqrtD' t x $ initSqrtD x
     where
@@ -91,6 +95,33 @@ sqrtD' t x@(m:^_) y
       converge ((0:^t'):_) = (0:^t')
       converge ((n:^_):ds@(d@(n':^_):_)) = if abs (n-n') <= 1 then d else converge ds
       converge _ = error "List terminating in converge."
+
+-- |Reciprocal of square root using Newton's iteration.
+sqrtRecD :: Int -> Dyadic -> Dyadic
+sqrtRecD t a = sqrtRecD' t a $ initSqrtRecD a
+
+-- |Gives initial values for the iteration. Based on the three most
+-- significant bits of the argument. Should consider to use machine floating
+-- point to give initial value.
+initSqrtRecD :: Dyadic -> Dyadic
+initSqrtRecD (m :^ s) =
+  let i = integerLog2 m
+      n = shift m (3-i)
+      s' = (-i-s-1) `div` 2 - 5
+  in if even (s+i)
+     then ([62,59,56,53,51,49,48,46]!!(fromIntegral n-8)) :^ s'
+     else ([44,42,40,38,36,35,34,33]!!(fromIntegral n-8)) :^ s'
+
+-- |Reciprocal of square root using Newton's iteration with inital value as third argument.
+sqrtRecD' :: Int -> Dyadic -> Dyadic -> Dyadic
+sqrtRecD' t a x0 =
+  let step x = shiftD t $ x + shiftD t (x * (1 - shiftD t (x * x * a)) * (1 :^ (-1)))
+      xs = iterate step x0
+      converge :: [Dyadic] -> Dyadic
+      converge ((0:^t'):_) = (0:^t')
+      converge ((n:^_):ds@(d@(n':^_):_)) = if abs (n-n') <= 1 then d else converge ds
+      converge _ = error "List terminating in converge."
+  in converge xs
 
 divD' :: Int -> Dyadic -> Dyadic -> Dyadic
 divD' p a b = let (m:^_) = shiftD (2*p) a

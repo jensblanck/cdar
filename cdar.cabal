@@ -122,6 +122,7 @@ Benchmark BinSplitPar
 Executable examples
   hs-source-dirs:      examples
   main-is:             Main.hs
+  other-modules:       ExamplesRump
   build-depends:
     base, containers, deepseq, integer-gmp, cdar
     --   base >= 4 && < 5

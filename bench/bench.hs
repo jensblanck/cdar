@@ -22,25 +22,25 @@ logMap2 (Approx m e s) =
 orbit :: Fractional a => Rational -> [a]
 orbit c = iterate (logMap c) (fromRational (1%8))
 
-orbit2 :: Rational -> [BR Approx]
+orbit2 :: Rational -> [CReal]
 orbit2 c = iterate (((fromRational c)*) . fmap logMap2) (fromRational (1%8))
 
 suite :: [Benchmark]
 suite = [
     bgroup "Logistic 4" [
       bench "Double" $ nf (!! 10000) (orbit 4 :: [Double])
-    , bench "BR Approx" $ nf (require 10 . (!! 10000)) (orbit 4 :: [BR Approx])
-    , bench "BR Approx (2)" $ nf (require 10 . (!! 10000)) (orbit2 4 :: [BR Approx])
+    , bench "CReal" $ nf (require 10 . (!! 10000)) (orbit 4 :: [CReal])
+    , bench "CReal (2)" $ nf (require 10 . (!! 10000)) (orbit2 4 :: [CReal])
     ],
     bgroup "Logistic 3.5" [
       bench "Double" $ nf (!! 10000) (orbit (7%2) :: [Double])
-    , bench "BR Approx" $ nf (require 10 . (!! 10000)) (orbit (7%2) :: [BR Approx])
-    , bench "BR Approx (2)" $ nf (require 10 . (!! 10000)) (orbit2 (7%2) :: [BR Approx])
+    , bench "CReal" $ nf (require 10 . (!! 10000)) (orbit (7%2) :: [CReal])
+    , bench "CReal (2)" $ nf (require 10 . (!! 10000)) (orbit2 (7%2) :: [CReal])
     ],
     bgroup "Logistic 3" [
       bench "Double" $ nf (!! 10000) (orbit 3 :: [Double])
-    , bench "BR Approx" $ nf (require 10 . (!! 10000)) (orbit 3 :: [BR Approx])
-    , bench "BR Approx (2)" $ nf (require 10 . (!! 10000)) (orbit2 3 :: [BR Approx])
+    , bench "CReal" $ nf (require 10 . (!! 10000)) (orbit 3 :: [CReal])
+    , bench "CReal (2)" $ nf (require 10 . (!! 10000)) (orbit2 3 :: [CReal])
     ]
   ]
 
@@ -51,15 +51,15 @@ newSuite =
     , bench "B40" $ nf (expBinarySplittingA 40) 1
     , bench "T40" $ nf (expTaylorA 40) 1
     , bench "T'40" $ nf (expTaylorA' 40) 1
-    , bench "BR40" $ nf (require 40 . expBR) 1
+    , bench "CR40" $ nf (require 40 . expCR) 1
     , bench "B400" $ nf (expBinarySplittingA 400) 1
     , bench "T400" $ nf (expTaylorA 400) 1
     , bench "T'400" $ nf (expTaylorA' 400) 1
-    , bench "BR400" $ nf (require 400 . expBR) 1
+    , bench "CR400" $ nf (require 400 . expCR) 1
     , bench "B4000" $ nf (expBinarySplittingA 4000) 1
     , bench "T4000" $ nf (expTaylorA 4000) 1
     , bench "T'4000" $ nf (expTaylorA' 4000) 1
-    , bench "BR4000" $ nf (require 4000 . expBR) 1
+    , bench "CR4000" $ nf (require 4000 . expCR) 1
     ]
   , bgroup "logappr"
     [ bench "doubleLog" $ nf log (1.5 :: Double)
@@ -87,13 +87,13 @@ newSuite =
     [ bench "double" $ nf sin (1 :: Double)
     , bench "40" $ nf (require 40 . sin) 1
     , bench "40T" $ nf (sinTaylorA 40) 1
-    , bench "40BR" $ nf (require 40 . sinBR) 1
+    , bench "40CR" $ nf (require 40 . sinCR) 1
     , bench "400" $ nf (require 400 . sin) 1
     , bench "400T" $ nf (sinTaylorA 400) 1
-    , bench "400BR" $ nf (require 400 . sinBR) 1
+    , bench "400CR" $ nf (require 400 . sinCR) 1
 --    , bench "4000" $ nf (require 4000 . sin) 1
     , bench "4000T" $ nf (sinTaylorA 4000) 1
-    , bench "4000BR" $ nf (require 4000 . sinBR) 1
+    , bench "4000CR" $ nf (require 4000 . sinCR) 1
     ]
   , bgroup "cos"
     [ bench "double" $ nf cos (1 :: Double)
@@ -137,29 +137,36 @@ newSuite =
     , bench "log 400" $ nf (require 400 . log) 2
     , bench "log 4000" $ nf (require 4000 . log) 2
     , bench "sin D" $ nf sin (1 :: Double)
-    , bench "sin 40" $ nf (require 40 . sinBR) 1
-    , bench "sin 400" $ nf (require 400 . sinBR) 1
-    , bench "sin 4000" $ nf (require 4000 . sinBR) 1
+    , bench "sin 40" $ nf (require 40 . sinCR) 1
+    , bench "sin 400" $ nf (require 400 . sinCR) 1
+    , bench "sin 4000" $ nf (require 4000 . sinCR) 1
     , bench "cos D" $ nf cos (1 :: Double)
-    , bench "cos 40" $ nf (require 40 . cosBR) 1
-    , bench "cos 400" $ nf (require 400 . cosBR) 1
-    , bench "cos 4000" $ nf (require 4000 . cosBR) 1
+    , bench "cos 40" $ nf (require 40 . cosCR) 1
+    , bench "cos 400" $ nf (require 400 . cosCR) 1
+    , bench "cos 4000" $ nf (require 4000 . cosCR) 1
     , bench "atan D" $ nf atan (1 :: Double)
-    , bench "atan 40" $ nf (require 40 . atanBR) 1
-    , bench "atan 400" $ nf (require 400 . atanBR) 1
-    , bench "atan 4000" $ nf (require 4000 . atanBR) 1
+    , bench "atan 40" $ nf (require 40 . atanCR) 1
+    , bench "atan 400" $ nf (require 400 . atanCR) 1
+    , bench "atan 4000" $ nf (require 4000 . atanCR) 1
     ]
   , env setupEnv $ \ ~(pi1,pi2) ->
     bgroup "elementary Approx"
     [ bench "+ double" $ nf (\x -> x+x) (pi :: Double)
     , bench "* double" $ nf (\x -> x*x) (pi :: Double)
     , bench "rec double" $ nf (1/) (pi :: Double)
+    , bench "sqrt double" $ nf (sqrt) (pi :: Double)
     , bench "+ 50" $ nf (\x -> x+x) pi1
     , bench "* 50" $ nf (\x -> x*x) pi1
     , bench "rec 50" $ nf (recipA 50) pi1
+    , bench "sqrt 50" $ nf (sqrtA 50) pi1
+    , bench "sqrt' 50" $ nf (sqrtA' 50) pi1
+    , bench "sqrtRec 50" $ nf (sqrtRecA 50) pi1
     , bench "+ 1000" $ nf (\x -> x+x) pi2
     , bench "* 1000" $ nf (\x -> x*x) pi2
     , bench "rec 1000" $ nf (recipA 1000) pi2
+    , bench "sqrt 1000" $ nf (sqrtA 1000) pi2
+    , bench "sqrt' 1000" $ nf (sqrtA' 1000) pi2
+    , bench "sqrtRec 1000" $ nf (sqrtRecA 1000) pi2
     ]
   ]
 
@@ -174,7 +181,7 @@ threadSuite u v =
   ]
 
 main :: IO ()
-main = defaultMain $ newSuite ++ suite
+main = defaultMain $ last newSuite :[] --newSuite ++ suite
 
 {- Are threads making criterion confused, times seem ok, but reported as unreliable.
 

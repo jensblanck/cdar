@@ -44,7 +44,10 @@ module Data.CDAR.Approx (Approx(..)
                         ,poly
                         ,pow
                         ,powers
+                        ,sqrtHeronA
                         ,sqrtA
+                        ,sqrtRecA
+                        ,findStartingValues
                         ,sqrtD
                         ,shiftD
                         ,sqrA
@@ -81,6 +84,7 @@ module Data.CDAR.Approx (Approx(..)
                         ,toDouble
                         ,polynomial
                         ,taylorCR
+                        ,atanCR
                         ,piCRMachin
                         ,piMachinCR
                         ,piBorweinCR
@@ -701,18 +705,13 @@ powers (Approx m e s) =
 powers _ = repeat Bottom
 
 {-|
-Compute the square root of an approximation.
-
-This and many other operations on approximations is just a reimplementation of
-interval arithmetic, with an extra argument limiting the effort put into the
-computation. This is done via the precision argument.
-
-The resulting approximation should approximate the image of every point in the
-input approximation.
+Old implementation of sqrt using Heron's method. Using the current method
+below proved to be more than twice as fast for small arguments (~50 bits) and
+many times faster for larger arguments.
 -}
-sqrtA :: Precision -> Approx -> Approx
-sqrtA _ Bottom = Bottom
-sqrtA k a@(Approx m e s)
+sqrtHeronA :: Precision -> Approx -> Approx
+sqrtHeronA _ Bottom = Bottom
+sqrtHeronA k a@(Approx m e s)
     | -m > e    = error "Attempting sqrt of Approx containing only negative numbers."
     | m < e     = Bottom
     | e == 0    = let (n:^t) = shiftD (-k) $ sqrtD (-k-2) (m:^s)
@@ -725,6 +724,69 @@ sqrtA k a@(Approx m e s)
                       l@(n:^t) = sqrtD s' ((m-e):^s)
                       (n':^t') = sqrtD' s' ((m+e):^s) l
                   in fromEDI $ Interval.Interval (Finite ((n-1):^t)) (Finite ((n'+1):^t'))
+
+{-|
+Compute the square root of an approximation.
+
+This and many other operations on approximations is just a reimplementation of
+interval arithmetic, with an extra argument limiting the effort put into the
+computation. This is done via the precision argument.
+
+The resulting approximation should approximate the image of every point in the
+input approximation.
+-}
+sqrtA :: Precision -> Approx -> Approx
+sqrtA k x = limitAndBound k $ x * sqrtRecA k x
+
+{-|
+This uses Newton's method for computing the reciprocal of the square root.
+-}
+sqrtRecA :: Precision -> Approx -> Approx
+sqrtRecA _ Bottom = Bottom
+sqrtRecA k a@(Approx m e s)
+  | -m > e    = error "Attempting sqrtRec of Approx containing only negative numbers."
+  | m < e     = Bottom
+  | e == 0    = let (n:^t) = shiftD (-k) $ sqrtRecD (-k-2) (m:^s)
+                in Approx n 1 t
+  | m == e    = let (n:^t) = sqrtRecD (s `quot` 2 -errorBits) ((m+e):^s)
+                    n' = (n+2) `quot` 2
+                in Approx n' n' t
+  | otherwise = let (Finite p) = significance a
+                    s' = s `quot` 2 - p - errorBits
+                    l@(n:^t) = sqrtRecD s' ((m-e):^s)
+                    (n':^t') = sqrtRecD' s' ((m+e):^s) l
+                in fromEDI $ Interval.Interval (Finite ((n-1):^t)) (Finite ((n'+1):^t'))
+
+{-|
+The starting values for newton iterations can be found using the auxiliary function findStartingValues below.
+
+For example, to generate the starting values for sqrtRecD above using three leading bits for both odd and even exponents the following was used:
+
+> findStartingValues ((1/) . sqrt) [1,1.125..2]
+[Approx 4172150648 1 (-32),Approx 3945434766 1 (-32),Approx 3752147976 1 (-32),Approx 3584793264 1 (-32),Approx 3438037830 1 (-32),Approx 3307969824 1 (-32),Approx 3191645366 1 (-32),Approx 3086800564 1 (-32)]
+> mapM_ (putStrLn . showInBaseA 2 . limitSize 6) it
+0.111110~
+0.111011~
+0.111000~
+0.110101~
+0.110011~
+0.110001~
+0.110000~
+0.101110~
+> findStartingValues ((1/) . sqrt) [2,2.25..4]
+[Approx 2950156016 1 (-32),Approx 2789843678 1 (-32),Approx 2653169278 1 (-32),Approx 2534831626 1 (-32),Approx 2431059864 1 (-32),Approx 2339087894 1 (-32),Approx 2256834080 1 (-32),Approx 2182697612 1 (-32)]
+> mapM_ (putStrLn . showInBaseA 2 . limitSize 6) it
+0.101100~
+0.101010~
+0.101000~
+0.100110~
+0.100100~
+0.100011~
+0.100010~
+0.100001~
+-}
+findStartingValues :: (Double -> Double) -> [Double] -> [Approx]
+findStartingValues f = map (fromRational . toRational . (/2)) . (\l -> zipWith (+) l (tail l)) . map f
 
 -- |Square an approximation. Gives the exact image interval, as opposed to
 -- multiplicating a number with itself which will give a slightly larger

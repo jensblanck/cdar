@@ -79,6 +79,7 @@ module Data.CDAR.Approx (Approx(..)
                         ,logAgmA
                         ,agmLn
                         ,showCRealN
+                        ,showCReal
                         ,ok
                         ,require
                         ,toDouble
@@ -1382,8 +1383,9 @@ bumpLimit n = n * 3 `div` 2
 resources :: ZipList Resources
 resources = ZipList $ iterate bumpLimit startLimit
 
-instance Show CReal where
-    show = show . require 40
+-- Should not use show as it would be impossible to write a corresponding read instance.
+-- instance Show CReal where
+--     show = show . require 40
 
 instance Num CReal where
     x + y = (\a b l -> ok 10 $ limitAndBound l (a + b)) <$> x <*> y <*> resources
@@ -1404,6 +1406,10 @@ instance Real CReal where
 -- approximations are shown on separate lines.
 showCRealN :: Int -> CReal -> String
 showCRealN n = concat . intersperse "\n" . map showA . take n . getZipList
+
+-- | Shows a 'CReal' with the desired precision.
+showCReal :: Int -> CReal -> String
+showCReal p = showA . require p
 
 -- | Check that an approximation has at least /d/ bits of precision. This is
 -- used to bail out of computations where the size of approximation grow

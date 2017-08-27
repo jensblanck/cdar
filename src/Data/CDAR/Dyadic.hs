@@ -90,11 +90,6 @@ sqrtD' t x@(m:^_) y
       -- The base of a need to be the same as t', and the result will have base t'.
       newtonStep :: Dyadic -> Int -> Dyadic -> Dyadic
       newtonStep d t' a = shiftD t' $ (1:^(-1)) * (a + divD d a)
-      -- Need to check for 0, because of division
-      converge :: [Dyadic] -> Dyadic
-      converge ((0:^t'):_) = (0:^t')
-      converge ((n:^_):ds@(d@(n':^_):_)) = if abs (n-n') <= 1 then d else converge ds
-      converge _ = error "List terminating in converge."
 
 -- |Reciprocal of square root using Newton's iteration.
 sqrtRecD :: Int -> Dyadic -> Dyadic
@@ -117,11 +112,22 @@ sqrtRecD' :: Int -> Dyadic -> Dyadic -> Dyadic
 sqrtRecD' t a x0 =
   let step x = shiftD t $ x + shiftD t (x * (1 - shiftD t (x * x * a)) * (1 :^ (-1)))
       xs = iterate step x0
-      converge :: [Dyadic] -> Dyadic
-      converge ((0:^t'):_) = (0:^t')
-      converge ((n:^_):ds@(d@(n':^_):_)) = if abs (n-n') <= 1 then d else converge ds
-      converge _ = error "List terminating in converge."
   in converge xs
+
+-- Assuming a seqence of dyadic numbers with the same exponent converges
+-- quadratically. Then this returns the first element where it is known that
+-- the sequence will become essentially constant (differing by at most 1). If
+-- the numbers contain sufficiently many bits we need only wait until the
+-- difference has less than half as many bits (with a small margin).
+converge :: [Dyadic] -> Dyadic
+converge ((0:^s):_) = (0:^s)
+converge ((m:^_):ds@(d@(n:^_):_)) =
+  let a = integerLog2 m
+      b = integerLog2 (abs (m - n))
+  in if a <= 6
+     then if abs (m-n) <= 1 then d else converge ds
+     else if 2 * b <= a - 3 then d else converge ds
+converge _ = error "List terminating in converge."
 
 divD' :: Int -> Dyadic -> Dyadic -> Dyadic
 divD' p a b = let (m:^_) = shiftD (2*p) a

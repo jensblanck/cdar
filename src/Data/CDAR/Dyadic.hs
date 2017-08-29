@@ -2,7 +2,7 @@
    'a * 2 ^ s' is 'a :^ s'. The exponent 's' is an 'Int', but the 'a' is an
    arbitrary 'Integer'.
 -}
-module Data.CDAR.Dyadic (Dyadic(..),normalise,shiftD,sqrtD,sqrtD',sqrtRecD,sqrtRecD',piMachinD,piBorweinD,ln2D) where
+module Data.CDAR.Dyadic (Dyadic(..),normalise,shiftD,sqrtD,sqrtD',sqrtRecD,sqrtRecD',initSqrtRecD,initSqrtRecDoubleD,piMachinD,piBorweinD,ln2D) where
 
 import Data.Ratio
 import Data.Bits
@@ -93,12 +93,13 @@ sqrtD' t x@(m:^_) y
 
 -- |Reciprocal of square root using Newton's iteration.
 sqrtRecD :: Int -> Dyadic -> Dyadic
-sqrtRecD t a = sqrtRecD' t a $ initSqrtRecD a
+sqrtRecD t a = sqrtRecD' t a $ initSqrtRecDoubleD a
 
 -- |Gives initial values for the iteration. Based on the three most
 -- significant bits of the argument. Should consider to use machine floating
 -- point to give initial value.
 initSqrtRecD :: Dyadic -> Dyadic
+initSqrtRecD (0 :^ _) = error "Divide by zero in initSqrtRecD"
 initSqrtRecD (m :^ s) =
   let i = integerLog2 m
       n = shift m (3-i)
@@ -106,6 +107,20 @@ initSqrtRecD (m :^ s) =
   in if even (s+i)
      then ([62,59,56,53,51,49,48,46]!!(fromIntegral n-8)) :^ s'
      else ([44,42,40,38,36,35,34,33]!!(fromIntegral n-8)) :^ s'
+
+-- Using Double to find a good first approximation to SqrtRec. Extracts 52
+-- bits from the dyadic number and encodes a float in the range [1/2,2).
+-- Decodes the result of the Double computation as a dyadic taking care of the
+-- exponent explicitly (as the range of Double exponents is too small).
+initSqrtRecDoubleD :: Dyadic -> Dyadic
+initSqrtRecDoubleD (0 :^ _) = error "Divide by zero in initSqrtRecDoubleD"
+initSqrtRecDoubleD (m :^ s) =
+  let i = integerLog2 m
+      n = shift m (52-i)
+      s' = (-i-s) `div` 2 - 52
+      (m',_) = decodeFloat . (1/) . sqrt $ encodeFloat n (if even (s+i) then (-52) else (-51))
+      t = if m' /= bit 52 && even (s+i) then s'-1 else s'
+  in m' :^ t
 
 -- |Reciprocal of square root using Newton's iteration with inital value as third argument.
 sqrtRecD' :: Int -> Dyadic -> Dyadic -> Dyadic

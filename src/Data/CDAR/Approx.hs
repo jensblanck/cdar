@@ -100,7 +100,8 @@ module Data.CDAR.Approx (Approx(..)
                         ,sinCR
                         ,cosCR
                         ,sqrtCR
-                        ,expCR) where
+                        ,expCR
+                        ,checkCRN) where
 
 import           Control.Applicative (ZipList (..))
 import           Control.DeepSeq
@@ -1580,3 +1581,6 @@ instance Floating CReal where
 
 instance PartialOrd CReal where
     partialCompare a b = head . dropWhile (== Nothing) . getZipList $ partialCompare <$> a <*> b
+
+checkCRN :: Int -> (a -> b -> Bool) -> ZipList a -> ZipList b -> Bool
+checkCRN n c x y = and $ zipWith c (take n $ getZipList x) (take n $ getZipList y)

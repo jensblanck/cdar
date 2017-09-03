@@ -193,10 +193,8 @@ scPropCR = testGroup "(checked by smallCheck)"
 
 qcPropCR = testGroup "(checked by quickCheck)"
   [
---    QC.testProperty "trigonometric identity" $ \x -> let y = fromDouble x
---                                                     in 1 `approximatedBy` (require 40 $ (sin y)^2 + (cos y)^2)
---  , QC.testProperty "trigonometric identity 1000" $ \x -> let y = fromDoubleAsExactValue x
---                                                          in 1 `approximatedBy` (require 1000 $ (sin y)^2 + (cos y)^2)
+    QC.testProperty "trigonometric identity" $ \x -> let y = fromDouble x
+                                                     in checkCRN 3 approximatedBy (1 :: CReal) ((sin y)^2 + (cos y)^2)
   ]
 
 testShowA :: Approx -> String

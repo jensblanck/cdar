@@ -968,7 +968,7 @@ expTaylorA res (Approx m e s) =
   let s' = s + integerLog2 m
       -- r' chosen so that a' below is smaller than 1/2
       r' = floor . sqrt . fromIntegral . max 5 $ res
-      r = s' + r'
+      r = max 0 $ s' + r'
       -- a' is a scaled by 2^k so that 2^(-r') <= a' < 2^(-r'+1)
       a' = (Approx m e (s-r))
       t = taylor
@@ -984,7 +984,7 @@ expTaylorA' res (Approx m e s) =
   let s' = s + integerLog2 m
       -- r' chosen so that a' below is smaller than 1/2
       r' = floor . sqrt . fromIntegral . max 5 $ res
-      r = s' + r'
+      r = max 0 $ s' + r'
       -- a' is a scaled by 2^k so that 2^(-r') <= a' < 2^(-r'+1)
       a' = (Approx m e (s-r))
       t = taylorA

@@ -17,7 +17,11 @@ import Data.CDAR
 main = defaultMain tests
 
 tests :: TestTree
-tests = testGroup "Tests" [dyadic, approx, unitTests]
+tests = testGroup "Tests"
+  [dyadic
+  ,approx
+  ,creal
+  ,unitTests]
 
 idempotent :: Eq a => (a -> a) -> a -> Bool
 idempotent f = \x -> f(x) == f(f(x))
@@ -121,7 +125,7 @@ scPropA = testGroup "(checked by smallcheck)"
   [ SC.testProperty "read . show = id" $ \a -> (a :: Approx) == read (show a)
   , SC.testProperty "fromEDI . toEDI = id" $ \a -> (a :: Approx) == fromEDI (toEDI a)
   , SC.testProperty "diameter" $ \a -> diameter a == upperBound a - lowerBound a
-  , SC.testProperty "fromDyadic exact and centre" $ \d -> let a = fromDyadic d in exact a && d == centre a
+  , SC.testProperty "fromDyadic exact and centre" $ \d -> let a = fromDyadic d in exact a && Just d == centre a
   , SC.testProperty "multiplication" $ \a b -> (toEDI (a*b) == (toEDI a) * (toEDI b))
   , SC.testProperty "addition" $ \a b -> (toEDI (a+b) == (toEDI a) + (toEDI b))
   , SC.testProperty "abs negate sign" $ \a -> approximatedBy 0 $ (a ::Approx) + (negate (signum a) * (abs a))
@@ -133,7 +137,7 @@ scPropA = testGroup "(checked by smallcheck)"
   , SC.testProperty "boundErrorTerm" $
     \a -> case a of
             Approx _ _ _ -> let b@(Approx _ e _) = boundErrorTerm a
-                            in (a `better` b) && (e < errorBound)
+                            in (a `better` b) && (e < 1024) -- 1024 is errorBound when errorBits is 10
             Bottom       -> better a (boundErrorTerm a)
   , SC.testProperty "limitSize" $
     \a -> case a of
@@ -144,11 +148,11 @@ scPropA = testGroup "(checked by smallcheck)"
   ]
 
 qcPropA :: TestTree
-qcPropA = testGroup "(checked by smallcheck)"
+qcPropA = testGroup "(checked by quickcheck)"
   [ QC.testProperty "read . show = id" $ \a -> (a :: Approx) == read (show a)
   , QC.testProperty "fromEDI . toEDI = id" $ \a -> (a :: Approx) == fromEDI (toEDI a)
   , QC.testProperty "diameter" $ \a -> diameter a == upperBound a - lowerBound a
-  , QC.testProperty "fromDyadic exact and centre" $ \d -> let a = fromDyadic d in exact a && d == centre a
+  , QC.testProperty "fromDyadic exact and centre" $ \d -> let a = fromDyadic d in exact a && Just d == centre a
   , QC.testProperty "multiplication" $ \a b -> (toEDI (a*b) == (toEDI a) * (toEDI b))
   , QC.testProperty "addition" $ \a b -> (toEDI (a+b) == (toEDI a) + (toEDI b))
   , QC.testProperty "abs negate sign" $ \a -> approximatedBy 0 $ (a ::Approx) + (negate (signum a) * (abs a))
@@ -168,7 +172,7 @@ qcPropA = testGroup "(checked by smallcheck)"
   , QC.testProperty "boundErrorTerm" $
     \a -> case a of 
             Approx _ _ _ -> let b@(Approx _ e _) = boundErrorTerm a
-                            in (a `better` b) && (e < errorBound)
+                            in (a `better` b) && (e < 1024) -- 1024 is errorBound when errorBits is 10
             Bottom       -> better a (boundErrorTerm a)
   , QC.testProperty "limitSize" $
     \a -> case a of 
@@ -176,6 +180,23 @@ qcPropA = testGroup "(checked by smallcheck)"
                             in (a `better` b) && (s >= -2)
             Bottom       -> better a (limitSize 2 a)
   , QC.testProperty "sqrt" $ \a -> let b = abs a in better b $ (sqrtA 0 b)^2
+  ]
+
+creal :: TestTree
+creal = testGroup "CReal" [propertiesCR]
+
+propertiesCR :: TestTree
+propertiesCR = testGroup "Properties of CReal" [scPropCR, qcPropCR]
+
+scPropCR = testGroup "(checked by smallCheck)"
+  []
+
+qcPropCR = testGroup "(checked by quickCheck)"
+  [
+--    QC.testProperty "trigonometric identity" $ \x -> let y = fromDouble x
+--                                                     in 1 `approximatedBy` (require 40 $ (sin y)^2 + (cos y)^2)
+--  , QC.testProperty "trigonometric identity 1000" $ \x -> let y = fromDoubleAsExactValue x
+--                                                          in 1 `approximatedBy` (require 1000 $ (sin y)^2 + (cos y)^2)
   ]
 
 testShowA :: Approx -> String

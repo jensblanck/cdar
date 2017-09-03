@@ -41,6 +41,9 @@ module Data.CDAR.Approx (Approx(..)
                         ,limitSize
                         ,checkPrecisionLeft
                         ,limitAndBound
+                        ,unionA
+                        ,intersectionA
+                        ,consistentA
                         ,poly
                         ,pow
                         ,powers
@@ -83,6 +86,8 @@ module Data.CDAR.Approx (Approx(..)
                         ,ok
                         ,require
                         ,toDouble
+                        ,fromDouble
+                        ,fromDoubleAsExactValue
                         ,polynomial
                         ,taylorCR
                         ,atanCR
@@ -659,6 +664,26 @@ limitAndBound :: Precision -> Approx -> Approx
 limitAndBound limit =
     limitSize limit . boundErrorTerm
 
+-- | Find the hull of two approximations.
+unionA :: Approx -> Approx -> Approx
+unionA Bottom _ = Bottom
+unionA _ Bottom = Bottom
+unionA a b = fromEDI $ Interval.Interval (lowerBound a `min` lowerBound b) (upperBound a `max` upperBound b)
+
+-- | Find the intersection of two approximations.
+intersectionA :: Approx -> Approx -> Approx
+intersectionA Bottom a = a
+intersectionA a Bottom = a
+intersectionA a b = fromEDI $ if l <= u then Interval.Interval l u else error "Trying to take intersection of two non-overlapping Approx."
+  where l = (lowerBound a `max` lowerBound b)
+        u = (upperBound a `min` upperBound b)
+
+-- | Determine if two approximations overlap.
+consistentA :: Approx -> Approx -> Bool
+consistentA Bottom _ = True
+consistentA _ Bottom = True
+consistentA a b = (lowerBound a `max` lowerBound b) <= (upperBound a `min` upperBound b)
+
 -- |Given a list of polynom coefficients and a value this evaluates the
 -- polynomial at that value.
 --
@@ -737,6 +762,7 @@ The resulting approximation should approximate the image of every point in the
 input approximation.
 -}
 sqrtA :: Precision -> Approx -> Approx
+sqrtA _ x@(Approx 0 0 _) =  x
 sqrtA k x = limitAndBound k $ x * sqrtRecA k x
 
 {-|
@@ -1229,11 +1255,11 @@ piAgmA t x = let t' = t - 10
                  b4 = b2^2
                  l = boundErrorTerm $ (((Approx 1 0 (-1))*b-(Approx 3 0 (-4))*b2+(Approx 9 0 (-5))*b3)*c*d-1/(1+b)+(2+b2)/d) / ((2+(Approx 1 0 (-1))*b2+(Approx 9 0 (-5))*b4)*c+b2)
                  u = boundErrorTerm $ ((Approx 1 0 (-1))*b*c*d-1/(1+b)+(2+b2+(Approx 3 0 (-3))*b3+(Approx 9 0 (-3))*b4)/d) / ((2+(Approx 1 0 (-1))*b2)*c+b2+(Approx 9 0 (-3))*b4)
-                 r = boundErrorTerm $ unionApprox l u
-                 e = boundErrorTerm $ unionApprox
+                 r = boundErrorTerm $ unionA l u
+                 e = boundErrorTerm $ unionA
                       ((2+(Approx 1 0 (-1))*b2)*r-(Approx 1 0 (-1))*b*d)
                       ((2+(Approx 1 0 (-1))*b2+(Approx 9 0 (-5))*b4)*r-((Approx 1 0 (-1))*b-(Approx 3 0 (-4))*b2+(Approx 9 0 (-5))*b3)*d)
-                 _pi = boundErrorTerm $ unionApprox (2*(snd (last ss))*e) (2*(fst (last ss))*e)
+                 _pi = boundErrorTerm $ unionA (2*(snd (last ss))*e) (2*(fst (last ss))*e)
              in _pi
                 
 -- | Compute approximations of ln 2. Lifted from computation on dyadic numbers.
@@ -1262,12 +1288,12 @@ lnSuperSizeUnknownPi t x =
         u = boundErrorTerm $
              ((Approx 1 0 (-1))*b*c*d-1/(1+b)+(2+b2+(Approx 3 0 (-3))*b3+(Approx 9 0 (-3))*b4)/d)
              / ((2+(Approx 1 0 (-1))*b2)*c+b2+(Approx 9 0 (-3))*b4)
-        r = boundErrorTerm $ unionApprox l u
-        e = boundErrorTerm $ unionApprox
+        r = boundErrorTerm $ unionA l u
+        e = boundErrorTerm $ unionA
              ((2+(Approx 1 0 (-1))*b2)*r-(Approx 1 0 (-1))*b*d)
              ((2+(Approx 1 0 (-1))*b2+(Approx 9 0 (-5))*b4)*r
               -((Approx 1 0 (-1))*b-(Approx 3 0 (-4))*b2+(Approx 9 0 (-5))*b3)*d)
-        _pi = boundErrorTerm $ unionApprox (2*bn*e) (2*an*e)
+        _pi = boundErrorTerm $ unionA (2*bn*e) (2*an*e)
     in (r,_pi) --[a,b,c,d,b2,b3,b4,l,u,r,e,pi]
 
 -- | Compute logarithms using AGM as described in Borwein and Borwein's book 'Pi and
@@ -1285,11 +1311,11 @@ lnSuperSizeKnownPi t _pi x =
                        ,boundErrorTerm $ sqrtA (-t') (_a*_b))
         close (_a,_b) = approximatedBy 0 $ _a-_b
         ((an,bn):_) = dropWhile (not . close) $ iterate step (a,b)
-        i = boundErrorTerm $ unionApprox (_pi*recipA (-t') (2*an)) (_pi*recipA (-t') (2*bn))
+        i = boundErrorTerm $ unionA (_pi*recipA (-t') (2*an)) (_pi*recipA (-t') (2*bn))
         l = (i + ((Approx 1 0 (-1))*b-(Approx 3 0 (-4))*b2+(Approx 9 0 (-5))*b3)*b1sqrt)
             / (2 + (Approx 1 0 (-1))*b2 + (Approx 9 0 (-5))*b4)
         u = (i + (Approx 1 0 (-1))*b*b1sqrt) / (2 + (Approx 1 0 (-1))*b2)
-    in boundErrorTerm $ unionApprox l u
+    in boundErrorTerm $ unionA l u
 
 lnLarge :: Precision -> Approx -> Approx
 lnLarge t x =
@@ -1324,11 +1350,6 @@ logAgmA t x
     | upperBound x < pure 3       = lnSmall t x
     | otherwise                   = error "Logic fault in logAgmA."
 
--- | Find the hull of two approximations.
-unionApprox :: Approx -> Approx -> Approx
-unionApprox Bottom _ = Bottom
-unionApprox _ Bottom = Bottom
-unionApprox a b = fromEDI $ Interval.Interval (lowerBound a `min` lowerBound b) (upperBound a `max` upperBound b)
 
 agmA :: Precision -> Approx -> Approx -> [(Approx,Approx)]
 agmA t a b = let t' = t - 5
@@ -1343,7 +1364,7 @@ agm1 :: [(Approx, Approx)] -> [Approx]
 agm1 = zipWith (*) [Approx 1 0 i | i <- [-1,0..]] . map (uncurry sqDiff)
 
 agm2 :: [Approx] -> Approx
-agm2 xs = sum (init xs) + unionApprox 0 (2 * last xs)
+agm2 xs = sum (init xs) + unionA 0 (2 * last xs)
 
 -- | Compute logarithms using AGM as described in Borwein and Borwein's book 'Pi and
 -- the AGM'.
@@ -1362,11 +1383,11 @@ agmLn t x = let t' = t - 10
 --                u = boundErrorTerm $ ((Approx 1 0 (-1))*b*c*d-recipA t' (1+b)+(2+b2+(Approx 3 0 (-3))*b3+(Approx 9 0 (-3))*b4)*recipA t' d) *recipA t' ((2+(Approx 1 0 (-1))*b2)*c+b2+(Approx 9 0 (-3))*b4)
                 l = boundErrorTerm $ (((Approx 1 0 (-1))*b-(Approx 3 0 (-4))*b2+(Approx 9 0 (-5))*b3)*c*d-1/(1+b)+(2+b2)/d) / ((2+(Approx 1 0 (-1))*b2+(Approx 9 0 (-5))*b4)*c+b2)
                 u = boundErrorTerm $ ((Approx 1 0 (-1))*b*c*d-1/(1+b)+(2+b2+(Approx 3 0 (-3))*b3+(Approx 9 0 (-3))*b4)/d) / ((2+(Approx 1 0 (-1))*b2)*c+b2+(Approx 9 0 (-3))*b4)
-                r = boundErrorTerm $ unionApprox l u
-                e = boundErrorTerm $ unionApprox
+                r = boundErrorTerm $ unionA l u
+                e = boundErrorTerm $ unionA
                       ((2+(Approx 1 0 (-1))*b2)*r-(Approx 1 0 (-1))*b*d)
                       ((2+(Approx 1 0 (-1))*b2+(Approx 9 0 (-5))*b4)*r-((Approx 1 0 (-1))*b-(Approx 3 0 (-4))*b2+(Approx 9 0 (-5))*b3)*d)
-                _pi = boundErrorTerm $ unionApprox (2*(snd (last ss))*e) (2*(fst (last ss))*e)
+                _pi = boundErrorTerm $ unionA (2*(snd (last ss))*e) (2*(fst (last ss))*e)
             in r --[a,b,c,d,b2,b3,b4,l,u,r,e,_pi]
   
 
@@ -1425,6 +1446,26 @@ require d x = head . dropWhile (== Bottom) . getZipList $ ok d <$> x
 -- | Gives a 'Double' approximation of a 'CReal' number.
 toDouble :: CReal -> Maybe Double
 toDouble = toDoubleA . require (54+errorBits)
+
+fromDouble :: Double -> CReal
+fromDouble x =
+  let (m, s) = decodeFloat x
+  -- When the mantissa of a floating point is interpreted as a whole number
+  -- instead of as a fraction in the IEEE 754 encoding the exponent 972
+  -- corresponds to 1024, which is what IEEE 754 use to encode infinity and
+  -- NaN.
+  in if (m == 972) then pure Bottom
+     else pure (Approx m 1 s)
+
+fromDoubleAsExactValue :: Double -> CReal
+fromDoubleAsExactValue x =
+  let (m, s) = decodeFloat x
+  -- When the mantissa of a floating point is interpreted as a whole number
+  -- instead of as a fraction in the IEEE 754 encoding the exponent 972
+  -- corresponds to 1024, which is what IEEE 754 use to encode infinity and
+  -- NaN.
+  in if (m == 972) then pure Bottom
+     else pure (Approx m 0 s)
 
 transposeZipList :: [ZipList a] -> ZipList [a]
 transposeZipList = ZipList . transpose . map getZipList
@@ -1526,14 +1567,16 @@ instance Floating CReal where
     log x = logA <$> resources <*> x -- logAgmA is an alternative
     sin x = sinA <$> resources <*> x
     cos x = cosA <$> resources <*> x
-    asin = undefined
+    asin x = 2 * (atan (x / (1 + (sqrt (1 - x^2)))))
+    acos x = halfPi - asin x
     atan x = atanA <$> resources <*> x
-    acos = undefined
-    sinh = undefined
-    cosh = undefined
-    asinh = undefined
-    atanh = undefined
-    acosh = undefined
+    sinh x = ((exp x) - (exp $ negate x)) / 2
+    cosh x = ((exp x) + (exp $ negate x)) / 2
+    tanh x = let t = exp (2*x) in (t-1)/(t+1)
+    asinh x = log (x + sqrt (x^2 + 1))
+    acosh x = logA <$> resources <*> x + sqrt (x^2 - 1)
+    atanh x = (logA <$> resources <*> (1+x) / (1-x)) / 2
+
 
 instance PartialOrd CReal where
     partialCompare a b = head . dropWhile (== Nothing) . getZipList $ partialCompare <$> a <*> b

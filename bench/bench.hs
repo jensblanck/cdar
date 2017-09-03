@@ -1,5 +1,5 @@
 import Control.Concurrent
-import Control.Monad
+import Control.Monad ()
 import Criterion.Main
 
 import Data.Bits
@@ -168,7 +168,9 @@ newSuite =
     ]
   ]
 
+setupEnv :: IO (Approx, Approx)
 setupEnv = return . (\a -> (limitAndBound 50 a, a)) . limitAndBound 1000 . require 1000 $ pi
+setupEnvPi :: IO (Approx, Approx, Approx)
 setupEnvPi = return . (\a -> (limitAndBound 40 a, limitAndBound 400 a, limitAndBound 4000 a)) . require 4000 $ pi
 
 threadSuite :: MVar Approx -> MVar Approx -> [Benchmark]

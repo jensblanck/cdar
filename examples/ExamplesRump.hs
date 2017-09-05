@@ -1,4 +1,17 @@
 {-# LANGUAGE NoMonomorphismRestriction #-}
+{-|
+Two examples given to me by S Rump that challenge the precision of floating
+point computations.
+
+The first example gives the wrong sign with Double arithmetic, but even the
+first approximation of a CReal is correct.
+
+The second example gives the correct value with Double, but we can see that it
+is difficult as it takes some extra precision to produce the right result.
+
+The usage of showCRealN is to show the underlying computations; it is not
+intended way to use CReal.
+-}
 module ExamplesRump where
 
 import Data.CDAR

@@ -100,8 +100,7 @@ module Data.CDAR.Approx (Approx(..)
                         ,sinCR
                         ,cosCR
                         ,sqrtCR
-                        ,expCR
-                        ,checkCRN) where
+                        ,expCR) where
 
 import           Control.Applicative (ZipList (..))
 import           Control.DeepSeq
@@ -1138,7 +1137,10 @@ atanBinarySplittingA res a =
   let rr x = x * recipA res (1 + sqrtA res (1 + sqrA x))
       a' = rr . rr . rr $ a -- range reduction so that |a'| < 1/4
       a2 = - sqrA a'
-      Finite res' = min (significance a) (Finite res)
+      res' = case (significance a) of
+               (Finite _r) -> min res _r
+               _ -> res
+--      Finite res' = min (significance a) (Finite res)
       n = (res' + 1) `div` 2
       (_, q, b, t) = abpq ones
                           [1,3..]
@@ -1156,7 +1158,10 @@ atanTaylorA res a =
   let rr x = x * recipA res (1 + sqrtA res (1 + sqrA x))
       a' = rr . rr . rr $ a -- range reduction so that |a'| < 1/4
       a2 = - sqrA a'
-      Finite res' = min (significance a) (Finite res)
+      res' = case (significance a) of
+               (Finite _r) -> min res _r
+               _ -> res
+--      Finite res' = min (significance a) (Finite res)
       t = taylorA res' (map (recipA res') [1,3..]) a2
   in boundErrorTerm . (8*) $ t
 
@@ -1581,6 +1586,3 @@ instance Floating CReal where
 
 instance PartialOrd CReal where
     partialCompare a b = head . dropWhile (== Nothing) . getZipList $ partialCompare <$> a <*> b
-
-checkCRN :: Int -> (a -> b -> Bool) -> ZipList a -> ZipList b -> Bool
-checkCRN n c x y = and $ zipWith c (take n $ getZipList x) (take n $ getZipList y)

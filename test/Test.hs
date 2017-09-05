@@ -6,22 +6,23 @@ import Test.Tasty.HUnit
 import Test.SmallCheck.Series as SC
 import GHC.Generics
 
+import Control.Applicative (ZipList (..))
 import Control.Monad (liftM3)
 import Data.Functor
 
 import Data.List
 import Data.Ord
-
+import Data.Fixed (mod')
 import Data.CDAR
 
 main = defaultMain tests
 
 tests :: TestTree
-tests = testGroup "Tests"
-  [dyadic
-  ,approx
-  ,creal
-  ,unitTests]
+tests = testGroup "Tests" [creal, unitTests]
+  -- [dyadic
+  -- ,approx
+  -- ,creal
+  -- ,unitTests]
 
 idempotent :: Eq a => (a -> a) -> a -> Bool
 idempotent f = \x -> f(x) == f(f(x))
@@ -188,13 +189,51 @@ creal = testGroup "CReal" [propertiesCR]
 propertiesCR :: TestTree
 propertiesCR = testGroup "Properties of CReal" [scPropCR, qcPropCR]
 
+checkCRN :: Int -> (a -> b -> Bool) -> ZipList a -> ZipList b -> Bool
+checkCRN n c x y = and $ zipWith c (take n $ getZipList x) (take n $ getZipList y)
+
 scPropCR = testGroup "(checked by smallCheck)"
   []
 
 qcPropCR = testGroup "(checked by quickCheck)"
   [
-    QC.testProperty "trigonometric identity" $ \x -> let y = fromDouble x
-                                                     in checkCRN 3 approximatedBy (1 :: CReal) ((sin y)^2 + (cos y)^2)
+    QC.testProperty "trigonometric identity" $ \x -> let y = fromDoubleAsExactValue x
+                                                     in checkCRN 5 approximatedBy (1 :: CReal) ((sin y)^2 + (cos y)^2)
+  , QC.testProperty "^2 . sqrt" $ \x -> let y = fromDoubleAsExactValue x
+                                        in x >= 0 QC.==> checkCRN 5 approximatedBy y ((sqrt y)^2)
+  , QC.testProperty "sqrt . ^2" $ \x -> let y = fromDoubleAsExactValue x
+                                        in checkCRN 5 approximatedBy (abs y) (sqrt (y^2))
+  , QC.testProperty "log . exp" $ \x -> let y = fromDoubleAsExactValue x
+                                        in checkCRN 5 approximatedBy y (log (exp y))
+  , QC.testProperty "exp . log" $ \x -> let y = fromDoubleAsExactValue x
+                                        in x > 0 QC.==> checkCRN 5 approximatedBy y (exp (log y))
+  , QC.testProperty "asin . sin (could fail due to different branches)" $ \x -> let x' = x `mod'` pi - (pi/2)
+                                                                                    y = fromDoubleAsExactValue x'
+                                         in checkCRN 5 approximatedBy y (asin (sin y))
+  , QC.testProperty "sin . asin" $ \x -> let y = fromDoubleAsExactValue (if abs x > 1 then 1/x else x)
+                                         in checkCRN 5 approximatedBy y (sin (asin y))
+  , QC.testProperty "acos . cos (could fail due to different branches)" $ \x -> let x' = x `mod'` pi
+                                                                                    y = fromDoubleAsExactValue x'
+                                                                                in checkCRN 5 approximatedBy y (acos (cos y))
+  , QC.testProperty "cos . acos" $ \x -> let y = fromDoubleAsExactValue (if abs x > 1 then 1/x else x)
+                                         in checkCRN 5 approximatedBy y (cos (acos y))
+  , QC.testProperty "atan . tan (could fail due to different branches)" $ \x -> let x' = x `mod'` pi - (pi/2)
+                                                                                    y = fromDoubleAsExactValue x'
+                                                                                in checkCRN 5 approximatedBy y (atan (tan y))
+  , QC.testProperty "tan . atan" $ \x -> let y = fromDoubleAsExactValue x
+                                         in checkCRN 5 approximatedBy y (tan (atan y))
+  , QC.testProperty "asinh . sinh" $ \x -> let y = fromDoubleAsExactValue x
+                                           in checkCRN 5 approximatedBy y (asinh (sinh y))
+  , QC.testProperty "sinh . asinh" $ \x -> let y = fromDoubleAsExactValue x
+                                           in checkCRN 5 approximatedBy y (sinh (asinh y))
+  , QC.testProperty "acosh . cosh" $ \x -> let y = fromDoubleAsExactValue x
+                                           in x >= 0 QC.==> checkCRN 5 approximatedBy y (acosh (cosh y))
+  , QC.testProperty "cosh . acosh" $ \x -> let y = fromDoubleAsExactValue x
+                                           in x >= 1 QC.==> checkCRN 5 approximatedBy y (cosh (acosh y))
+  , QC.testProperty "atanh . tanh" $ \x -> let y = fromDoubleAsExactValue x
+                                           in checkCRN 5 approximatedBy y (atanh (tanh y))
+  , QC.testProperty "tanh . atanh" $ \x -> let y = fromDoubleAsExactValue (if abs x >= 1 then 1/x else x)
+                                           in abs x /= 1 QC.==> checkCRN 5 approximatedBy y (tanh (atanh y))
   ]
 
 testShowA :: Approx -> String
@@ -208,4 +247,5 @@ unitTests = testGroup "Unit tests"
   [ testCase "showA 1" $ showA (Approx 7 2 2) @?= "3~"
   , testCase "showA 2" $ showA (Approx 7 2 3) @?= "~~"
   , testCase "showA (Approx 99 2 0)" $ showA (Approx 99 2 0) @?= "10~"
+  , testCase "sin π/2 = 1 (1000 bits)" $ approximatedBy 1 (require 1000 . sin $ pi/2) @?= True
   ]

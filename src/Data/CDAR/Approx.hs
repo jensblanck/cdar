@@ -106,7 +106,8 @@ import           Control.Applicative (ZipList (..))
 import           Control.DeepSeq
 import           Control.Exception
 import           Data.Bits
-import           Data.CDAR.Dyadic hiding (normalise)
+import           Data.CDAR.Classes
+import           Data.CDAR.Dyadic
 import           Data.CDAR.Extended
 import           Data.CDAR.IntegerLog
 import qualified Data.CDAR.Interval as Interval
@@ -186,6 +187,10 @@ data Approx = Approx Integer Integer Int
 instance NFData Approx where
     rnf Bottom = ()
     rnf (Approx m e s) = rnf m `seq` rnf e `seq` rnf s
+
+instance Scalable Approx where
+  scale Bottom _ = Bottom
+  scale (Approx m e s) n = Approx m e (s+n)
 
 {-|
 =The Computable Real data type
@@ -1005,9 +1010,11 @@ More thorough benchmarking is desirable.
 Binary splitting is faster than Taylor. AGM should be used over ~1000 bits.
 -}
 logA :: Precision -> Approx -> Approx
-logA res = if res < 500
-           then logBinarySplittingA res
-           else logAgmA (-res)
+logA _ Bottom = Bottom
+logA p (Approx m e s) =
+  let (n :^ t) = logD (negate p) $ (m-e) :^ s
+      (n' :^ t') = logD (negate p) $ (m+e) :^ s
+  in fromEDI $ Interval.Interval (Finite ((n-1):^t)) (Finite ((n'+1):^t'))
 
 -- | Logarithm by binary splitting summation of Taylor series.
 logBinarySplittingA :: Precision -> Approx -> Approx

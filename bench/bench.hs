@@ -159,12 +159,13 @@ newSuite =
     , bench "* 50" $ nf (\x -> x*x) pi1
     , bench "rec 50" $ nf (recipA 50) pi1
     , bench "sqrt 50" $ nf (sqrtA 50) pi1
-    , bench "sqrtRec 50" $ nf (sqrtRecA 50) pi1
+    , bench "log 50" $ nf (logA 50) pi1
     , bench "+ 1000" $ nf (\x -> x+x) pi2
     , bench "* 1000" $ nf (\x -> x*x) pi2
     , bench "rec 1000" $ nf (recipA 1000) pi2
     , bench "sqrt 1000" $ nf (sqrtA 1000) pi2
     , bench "sqrtRec 1000" $ nf (sqrtRecA 1000) pi2
+    , bench "log 1000" $ nf (logA 1000) pi2
     ]
   ]
 

@@ -2,10 +2,11 @@
    'a * 2 ^ s' is 'a :^ s'. The exponent 's' is an 'Int', but the 'a' is an
    arbitrary 'Integer'.
 -}
-module Data.CDAR.Dyadic (Dyadic(..),normalise,shiftD,sqrtD,sqrtD',sqrtRecD,sqrtRecD',initSqrtRecD,initSqrtRecDoubleD,piMachinD,piBorweinD,ln2D) where
+module Data.CDAR.Dyadic (Dyadic(..),shiftD,sqrtD,sqrtD',sqrtRecD,sqrtRecD',initSqrtRecD,initSqrtRecDoubleD,piMachinD,piBorweinD,ln2D,logD,atanhD,divD,divD') where
 
 import Data.Ratio
 import Data.Bits
+import Data.CDAR.Classes
 import Data.CDAR.IntegerLog
 
 -- Dyadic numbers
@@ -23,18 +24,13 @@ instance Ord Dyadic where
     compare (a :^ s) (b :^ t) | s <= t    = compare a (unsafeShiftL b (t-s))
                               | otherwise = compare (unsafeShiftL a (s-t)) b
 
--- |Normalises a dyadic number a :^ s by dividing out factors of 2 from a and
--- adjusting the exponent accordingly.
-normalise :: Dyadic -> Dyadic
-normalise (0 :^ _) = 0 :^ 0
-normalise d@(a :^ s)
-    | odd a     = d
-    | otherwise = normalise $ (unsafeShiftR a 1) :^ (s+1)
+instance Scalable Dyadic where
+  scale (a :^ s) n = a :^ (s+n)
 
 instance Num Dyadic where
     a :^ s + b :^ t 
-        | s <= t    = (a + unsafeShiftL b (t-s)) :^ s
-        | otherwise = (unsafeShiftL a (s-t) + b) :^ t
+        | s <= t    = (a + scale b (t-s)) :^ s
+        | otherwise = (scale a (s-t) + b) :^ t
     a :^ s * b :^ t = (a * b) :^ (s+t)
     negate (a :^ s) = (negate a) :^ s
     abs (a :^ s) = (abs a) :^ s
@@ -129,6 +125,11 @@ sqrtRecD' t a x0 =
       xs = iterate step x0
   in converge xs
 
+-- isqrt :: Integral t => t -> t
+-- isqrt 0 = 0
+-- isqrt 1 = 1
+-- isqrt n = head $ dropWhile (\x -> x*x > n) $ iterate (\x -> (x + n `div` x) `div` 2) (n `div` 2)
+
 -- Assuming a seqence of dyadic numbers with the same exponent converges
 -- quadratically. Then this returns the first element where it is known that
 -- the sequence will become essentially constant (differing by at most 1). If
@@ -181,7 +182,29 @@ ln2D t = let t' = t - 10 - 2 * integerLog2 (fromIntegral (abs t))
              d = zipWith (+) a b
              e = takeWhile (/= 0) . map (shiftD t') $ zipWith (*) d c
          in shiftD t $ sum e
-             
+
+logD :: Int -> Dyadic -> Dyadic
+logD t x@(a :^ s) =
+  if a <= 0 then error "logD: Non-positive argument"
+  else let t' = t - 5 -- 5 guard digits
+           r = s + integerLog2 (3*a) - 1
+           x' = scale x (-r) -- 2/3 <= x' <= 4/3
+           y = divD' t' (x' - 1) (x' + 1) -- |y| <= 1/5
+           z = fromIntegral r * ln2D t'
+       in  shiftD t . (+z) . flip scale 1 $ atanhD t' y
+
+atanhD :: Int -> Dyadic -> Dyadic
+atanhD t x@(a :^ s) =
+  if integerLog2 (abs a) + s >= 0 then error "atanhD: Argument outside domain, (-1,1)"
+  else let 
+    -- number of guard digits is 5+k where k depends on the precision [how do we know if this is enough?]
+    t' = t - 5 - integerLog2 (abs $ fromIntegral t) `div` 5
+    g _x _y = shiftD t' (_x * _y)
+    x2 = g x x
+    b = iterate (g x2) 1
+    c = (map (divD' t' 1 . fromIntegral) [1,3..])
+    in shiftD t . g x . sum . takeWhile (/= 0) $ zipWith g b c
+
 {-
 agmD :: Int -> Dyadic -> Dyadic -> Dyadic
 agmD t a b = let t' = t - 5

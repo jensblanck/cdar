@@ -13,12 +13,10 @@ module Data.CDAR.Approx (Approx(..)
 --                        ,errorBits
 --                        ,errorBound
 --                        ,defaultPrecision
-                        ,EDI
                         ,Precision
                         ,showA
                         ,showInBaseA
-                        ,toEDI
-                        ,fromEDI
+                        ,endToApprox
                         ,lowerBound
                         ,upperBound
                         ,centre
@@ -34,7 +32,6 @@ module Data.CDAR.Approx (Approx(..)
                         ,modA
                         ,divModA
                         ,toDoubleA
-                        ,toDoubleA2
                         ,precision
                         ,significance
                         ,boundErrorTerm
@@ -110,15 +107,11 @@ import           Data.CDAR.Classes
 import           Data.CDAR.Dyadic
 import           Data.CDAR.Extended
 import           Data.CDAR.IntegerLog
-import qualified Data.CDAR.Interval as Interval
 import           Data.CDAR.POrd
 import           Data.Char (intToDigit)
 import           Data.List (findIndex, intersperse, transpose, unfoldr, zipWith4)
 import           Data.Ratio
 
--- |The 'EDI' type stands for Extended Dyadic Interval. This is an endpoint
--- representation of our approximations.
-type EDI = Interval.Interval (Extended Dyadic)
 -- |A type synonym. Used to denote number of bits after binary point.
 type Precision = Int
 
@@ -340,21 +333,18 @@ showInexactA base b i f e =
               then ""
               else "." ++ frac ++ "~"
 
--- |Convert an approximation from centred form to end-point form.
-toEDI :: Approx -> EDI
-toEDI (Approx m e s) = Interval.Interval (Finite ((m-e):^s)) (Finite ((m+e):^s))
-toEDI _ = Interval.Interval NegInf PosInf
-
--- |Convert an approximation in end-point form to a centred form.
-fromEDI :: EDI -> Approx
-fromEDI (Interval.Interval (Finite l) (Finite u)) =
-    let a@(m:^s) = Interval.average l u
+-- |Construct a centred approximation from the end-points.
+endToApprox :: Extended Dyadic -> Extended Dyadic -> Approx
+endToApprox (Finite l) (Finite u)
+  | u < l = Bottom -- Might be better with a signalling error.
+  | otherwise =
+    let a@(m:^s) = scale (l + u) (-1)
         (n:^t)   = u-a
         r        = min s t
         m'       = unsafeShiftL m (s-r)
         n'       = unsafeShiftL n (t-r)
     in (Approx m' n' r)
-fromEDI _ = Bottom
+endToApprox _ _ = Bottom
 
 -- Interval operations
 -- |Gives the lower bound of an approximation as an 'Extended' 'Dyadic' number.
@@ -542,7 +532,7 @@ instance Ord Approx where
     compare _ _ = undefined
 
 instance IntervalOrd Approx where
-    intervalCompare a b = intervalCompare (toEDI a) (toEDI b)
+    intervalCompare a b = undefined -- intervalCompare (toEDI a) (toEDI b)
 
 instance PartialOrd Approx where
     partialCompare a b = f $ intervalCompare a b
@@ -563,11 +553,6 @@ instance Real Approx where
 toDoubleA :: Approx -> Maybe Double
 toDoubleA = fmap (fromRational . toRational) . centre
 
--- |Convert an approximation to in interval with 'Double' end-points. Warning:
--- This is a partial function, calling it on 'Bottom' will give a run-time
--- error.
-toDoubleA2 :: Approx -> Interval.Interval Double
-toDoubleA2 = fmap (fromRational . toRational) . toEDI
 
 -- |Computes the precision of an approximation. This is roughly the number of
 -- correct bits after the binary point.
@@ -673,13 +658,13 @@ limitAndBound limit =
 unionA :: Approx -> Approx -> Approx
 unionA Bottom _ = Bottom
 unionA _ Bottom = Bottom
-unionA a b = fromEDI $ Interval.Interval (lowerBound a `min` lowerBound b) (upperBound a `max` upperBound b)
+unionA a b = endToApprox (lowerBound a `min` lowerBound b) (upperBound a `max` upperBound b)
 
 -- | Find the intersection of two approximations.
 intersectionA :: Approx -> Approx -> Approx
 intersectionA Bottom a = a
 intersectionA a Bottom = a
-intersectionA a b = fromEDI $ if l <= u then Interval.Interval l u else error "Trying to take intersection of two non-overlapping Approx."
+intersectionA a b = if l <= u then endToApprox l u else error "Trying to take intersection of two non-overlapping Approx."
   where l = (lowerBound a `max` lowerBound b)
         u = (upperBound a `min` upperBound b)
 
@@ -754,7 +739,7 @@ sqrtHeronA k a@(Approx m e s)
                       s' = s `quot` 2 - p - errorBits
                       l@(n:^t) = sqrtD s' ((m-e):^s)
                       (n':^t') = sqrtD' s' ((m+e):^s) l
-                  in fromEDI $ Interval.Interval (Finite ((n-1):^t)) (Finite ((n'+1):^t'))
+                  in endToApprox (Finite ((n-1):^t)) (Finite ((n'+1):^t'))
 
 {-|
 Compute the square root of an approximation.
@@ -787,7 +772,7 @@ sqrtRecA k a@(Approx m e s)
                     s' = s `quot` 2 - p - errorBits
                     l@(n:^t) = sqrtRecD s' ((m-e):^s)
                     (n':^t') = sqrtRecD' s' ((m+e):^s) l
-                in fromEDI $ Interval.Interval (Finite ((n-1):^t)) (Finite ((n'+1):^t'))
+                in endToApprox (Finite ((n-1):^t)) (Finite ((n'+1):^t'))
 
 {-|
 The starting values for newton iterations can be found using the auxiliary function findStartingValues below.
@@ -1014,7 +999,7 @@ logA _ Bottom = Bottom
 logA p (Approx m e s) =
   let (n :^ t) = logD (negate p) $ (m-e) :^ s
       (n' :^ t') = logD (negate p) $ (m+e) :^ s
-  in fromEDI $ Interval.Interval (Finite ((n-1):^t)) (Finite ((n'+1):^t'))
+  in endToApprox (Finite ((n-1):^t)) (Finite ((n'+1):^t'))
 
 -- | Logarithm by binary splitting summation of Taylor series.
 logBinarySplittingA :: Precision -> Approx -> Approx

@@ -18,8 +18,6 @@ cabal-version:       >=1.10
 library
   exposed-modules:
       Data.CDAR
---    , Data.CDAR.BR
---    , Data.CDAR.CR
     , Data.CDAR.Classes
     , Data.CDAR.Extended
     , Data.CDAR.POrd
@@ -45,18 +43,19 @@ test-suite test
   type:      exitcode-stdio-1.0
   main-is:    Test.hs
   build-depends:
-      base >=4.7 && <4.10
-    , containers >=0.5 && <0.6
-    , deepseq >=1.3 && <1.5
-    , integer-gmp >=0.5 && <1.1
-    , QuickCheck >=2.6 && <3
-    , smallcheck >= 1.1 && < 1.2
-    , tasty-hunit >= 0.8 && < 0.10
-    , tasty-quickcheck >= 0.8 && < 0.9
-    , tasty-smallcheck >= 0.8 && < 0.9
-    , tasty >= 0.8 && < 0.12
-    , cdar >= 0.1
-    , parallel >=3.2 && <3.3
+      base, containers, deepseq, integer-gmp, QuickCheck, smallcheck, tasty-hunit, tasty-quickcheck, tasty-smallcheck, tasty, cdar >= 0.1
+    --   base >=4.7 && <4.10
+    -- , containers >=0.5 && <0.6
+    -- , deepseq >=1.3 && <1.5
+    -- , integer-gmp >=0.5 && <1.1
+    -- , QuickCheck >=2.6 && <3
+    -- , smallcheck >= 1.1 && < 1.2
+    -- , tasty-hunit >= 0.8 && < 0.10
+    -- , tasty-quickcheck >= 0.8 && < 0.9
+    -- , tasty-smallcheck >= 0.8 && < 0.9
+    -- , tasty >= 0.8 && < 0.12
+    -- , cdar >= 0.1
+    -- , parallel >=3.2 && <3.3
   hs-source-dirs: test
   default-language: Haskell2010
 
@@ -136,10 +135,10 @@ Executable examples
     -- , parallel >=3.2 && <3.3
   default-language: Haskell2010
 
-Executable logistic
-  hs-source-dirs:	examples
-  main-is:		Logistic.hs
-  build-depends:        base, cdar
-  default-language:	Haskell2010
+-- Executable logistic
+--   hs-source-dirs:	examples
+--   main-is:		Logistic.hs
+--   build-depends:        base, cdar
+--   default-language:	Haskell2010
 
 --SinBorwein, Time, 

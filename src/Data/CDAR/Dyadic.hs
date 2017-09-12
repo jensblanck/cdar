@@ -183,13 +183,15 @@ ln2D t = let t' = t - 10 - 2 * integerLog2 (fromIntegral (abs t))
              e = takeWhile (/= 0) . map (shiftD t') $ zipWith (*) d c
          in shiftD t $ sum e
 
+-- test case showing that log . exp /= id: Approx 6046642733321808 0 (-43)
+-- now that works, but this does not: -7.10579218615256280600078753195703029632568359375
 logD :: Int -> Dyadic -> Dyadic
 logD t x@(a :^ s) =
   if a <= 0 then error "logD: Non-positive argument"
-  else let t' = t - 5 -- 5 guard digits
+  else let t' = t - 10 - max 0 (integerLog2 a + s) -- (5 + size of argument) guard digits
            r = s + integerLog2 (3*a) - 1
            x' = scale x (-r) -- 2/3 <= x' <= 4/3
-           y = divD' t' (x' - 1) (x' + 1) -- |y| <= 1/5
+           y = divD' t' (x' - 1) (x' + 1) -- so |y| <= 1/5
            z = fromIntegral r * ln2D t'
        in  shiftD t . (+z) . flip scale 1 $ atanhD t' y
 
@@ -198,7 +200,7 @@ atanhD t x@(a :^ s) =
   if integerLog2 (abs a) + s >= 0 then error "atanhD: Argument outside domain, (-1,1)"
   else let 
     -- number of guard digits is 5+k where k depends on the precision [how do we know if this is enough?]
-    t' = t - 5 - integerLog2 (abs $ fromIntegral t) `div` 5
+    t' = t - 5 - integerLog2 (abs $ fromIntegral t) `div` 2
     g _x _y = shiftD t' (_x * _y)
     x2 = g x x
     b = iterate (g x2) 1

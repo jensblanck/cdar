@@ -1,7 +1,7 @@
 {-# LANGUAGE BangPatterns,GADTs,TypeSynonymInstances,FlexibleInstances #-}
 {-|
 = Computable Real Arithmetic
-This module provides the data type 'CReal' that implements the real closed field of computable real numbers.
+This module provides the data type 'CR' that implements the real closed field of computable real numbers.
 
 == Centred Dyadic Approximations
 The computable reals are realised as lists of rapidly shrinking intervals. The intervals used here are centred dyadic intervals, implemented here as the data type 'Approx'.
@@ -9,7 +9,7 @@ The computable reals are realised as lists of rapidly shrinking intervals. The i
 For more information on the theoretical aspects see <http://cs.swan.ac.uk/~csjens/pdf/centred.pdf>.
 -}
 module Data.CDAR.Approx (Approx(..)
-                        ,CReal
+                        ,CR(..)
 --                        ,errorBits
 --                        ,errorBound
 --                        ,defaultPrecision
@@ -78,8 +78,8 @@ module Data.CDAR.Approx (Approx(..)
                         ,lnSuperSizeUnknownPi
                         ,logAgmA
                         ,agmLn
-                        ,showCRealN
-                        ,showCReal
+                        ,showCRN
+                        ,showCR
                         ,ok
                         ,require
                         ,toDouble
@@ -103,6 +103,7 @@ import           Control.Applicative (ZipList (..))
 import           Control.DeepSeq
 import           Control.Exception
 import           Data.Bits
+import           Data.Char (isDigit)
 import           Data.CDAR.Classes
 import           Data.CDAR.Dyadic
 import           Data.CDAR.Extended
@@ -185,6 +186,9 @@ instance Scalable Approx where
   scale Bottom _ = Bottom
   scale (Approx m e s) n = Approx m e (s+n)
 
+instance Scalable CR where
+  scale (CR x) n = CR $ flip scale n <$> x
+
 {-|
 =The Computable Real data type
 
@@ -217,9 +221,9 @@ expected precision of approximations increase very quickly.
 In fact, 'ZipList' 'Approx' is used as the implementation of infinite
 sequences of approximations, as that allows for applicative style.
 Hopefully, it is not needed to access the internal representation of
-'CReal' directly.
+'CR' directly.
 -}
-type CReal = ZipList Approx
+newtype CR = CR {unCR :: ZipList Approx}
 
 -- |Number of bits that error term is allowed to take up. A larger size allows
 -- for more precise but slightly more costly computations. The value here is
@@ -445,8 +449,8 @@ instance Num Approx where
     negate (Approx m e s) = Approx (-m) e s
     negate Bottom = Bottom
     abs (Approx m e s)
-        | m' < e    = let e' = unsafeShiftR (m'+e+1) 1
-                      in Approx e' e' s
+        | m' < e    = let e' = m'+e
+                      in Approx e' e' (s-1)
         | otherwise = Approx m' e s
       where m' = abs m
     abs Bottom = Bottom
@@ -528,11 +532,11 @@ divModA _ _ = (Bottom, Bottom)
 instance Ord Approx where
     compare (Approx m e s) (Approx n f t)
         | abs ((m:^s)-(n:^t)) > (e:^s)+(f:^t) = compare (m:^s) (n:^t)
-        | otherwise                           = undefined
-    compare _ _ = undefined
+        | otherwise                           = error "compare: comparisons are partial on Approx"
+    compare _ _ = error "compare: comparisons are partial on Approx"
 
 instance IntervalOrd Approx where
-    intervalCompare a b = undefined -- intervalCompare (toEDI a) (toEDI b)
+    intervalCompare _a _b = error "Is this used?" -- intervalCompare (toEDI a) (toEDI b)
 
 instance PartialOrd Approx where
     partialCompare a b = f $ intervalCompare a b
@@ -810,8 +814,10 @@ findStartingValues f = map (fromRational . toRational . (/2)) . (\l -> zipWith (
 -- interval due to the dependency problem.
 sqrA :: Approx -> Approx
 sqrA Bottom = Bottom
-sqrA (Approx m e s) = Approx (m^(2 :: Int) + e^(2 :: Int)) (2*abs m*e) (2*s)
-
+sqrA (Approx m e s)
+  | am > e = Approx (m^(2 :: Int) + e^(2 :: Int)) (2*abs m*e) (2*s)
+  | otherwise = let m' = (am + e)^(2 :: Int) in Approx m' m' (2*s-1)
+  where am = abs m
 -- Binary splitting
 
 {-|
@@ -865,7 +871,7 @@ log2Factorials = map integerLog2 . scanl1 (*) $ 1:[1..]
 
 {-|
 Computes a sum of the form ∑ aₙ/qₙ where aₙ are approximations and qₙ are
-integers. Terms are added as long as they are larger than the than the current
+integers. Terms are added as long as they are larger than the current
 precision bound. The sum is adjusted for the tail of the series. For this to
 be correct we need the the terms to converge geometrically to 0 by a factor of
 at least 2.
@@ -875,7 +881,7 @@ taylor res as qs =
   let res' = res + errorBits
       f a q = limitAndBound res' $ a * recipA res' (fromIntegral q)
       bs = zipWith f as qs
-      (cs,(d:_)) = span nonZeroCentredA bs
+      (cs,(d:_)) = span nonZeroCentredA bs -- This span and the sum on the next line do probably not fuse!
   in fudge (sum cs) d
 
 -- | A list of factorial values.
@@ -906,10 +912,9 @@ nonZeroCentredA _ = True
 {-|
 Computes the sum of the form ∑ aₙxⁿ where aₙ and x are approximations.
 
-Terms are added as long as they are larger than the than the current precision
-bound. The sum is adjusted for the tail of the series. For this to be correct
-we need the the terms to converge geometrically to 0 by a factor of at least
-2.
+Terms are added as long as they are larger than the current precision bound.
+The sum is adjusted for the tail of the series. For this to be correct we need
+the the terms to converge geometrically to 0 by a factor of at least 2.
 -}
 taylorA :: Precision -> [Approx] -> Approx -> Approx
 taylorA res as x =
@@ -996,10 +1001,12 @@ Binary splitting is faster than Taylor. AGM should be used over ~1000 bits.
 -}
 logA :: Precision -> Approx -> Approx
 logA _ Bottom = Bottom
-logA p (Approx m e s) =
-  let (n :^ t) = logD (negate p) $ (m-e) :^ s
-      (n' :^ t') = logD (negate p) $ (m+e) :^ s
-  in endToApprox (Finite ((n-1):^t)) (Finite ((n'+1):^t'))
+logA p (Approx m e s)
+  | m > e =
+    let (n :^ t) = logD (negate p) $ (m-e) :^ s
+        (n' :^ t') = logD (negate p) $ (m+e) :^ s
+    in endToApprox (Finite ((n-1):^t)) (Finite ((n'+1):^t'))
+  | otherwise = Bottom
 
 -- | Logarithm by binary splitting summation of Taylor series.
 logBinarySplittingA :: Precision -> Approx -> Approx
@@ -1389,7 +1396,7 @@ agmLn t x = let t' = t - 10
             in r --[a,b,c,d,b2,b3,b4,l,u,r,e,_pi]
   
 
--- The CReal implementation
+-- The CR implementation
 
 type Resources = Int
 
@@ -1403,32 +1410,51 @@ resources :: ZipList Resources
 resources = ZipList $ iterate bumpLimit startLimit
 
 -- Should not use show as it would be impossible to write a corresponding read instance.
--- instance Show CReal where
+-- instance Show CR where
 --     show = show . require 40
 
-instance Num CReal where
-    x + y = (\a b l -> ok 10 $ limitAndBound l (a + b)) <$> x <*> y <*> resources
-    x * y = (\a b l -> ok 10 $ limitAndBound l (a * b)) <$> x <*> y <*> resources
-    negate x = negate <$> x
-    abs x = abs <$> x
-    signum x = signum <$> x
-    fromInteger n = pure (Approx n 0 0)
+instance Num CR where
+    (CR x) + (CR y) = CR $ (\a b l -> ok 10 $ limitAndBound l (a + b)) <$> x <*> y <*> resources
+    (CR x) * (CR y) = CR $ (\a b l -> ok 10 $ limitAndBound l (a * b)) <$> x <*> y <*> resources
+    negate (CR x) = CR $ negate <$> x
+    abs (CR x) = CR $ abs <$> x
+    signum (CR x) = CR $ signum <$> x
+    fromInteger n = CR $ pure (Approx n 0 0)
 
-instance Fractional CReal where
-    recip x = recipA <$> resources <*> x
-    fromRational x = toApprox <$> resources <*> pure x
+instance Fractional CR where
+    recip (CR x) = CR $ recipA <$> resources <*> x
+    fromRational x = CR $ toApprox <$> resources <*> pure x
 
-instance Real CReal where
+instance Eq CR where
+  (==) = error "CR does not have a total equality."
+
+instance Ord CR where
+  compare = error "CR does not have a total ordering."
+
+instance Real CR where
     toRational = toRational . require 40
 
--- | Shows the internal representation of a 'CReal'. The first /n/
+-- | Shows the internal representation of a 'CR'. The first /n/
 -- approximations are shown on separate lines.
-showCRealN :: Int -> CReal -> String
-showCRealN n = concat . intersperse "\n" . map showA . take n . getZipList
+showCRN :: Int -> CR -> String
+showCRN n (CR x) = concat . intersperse "\n" . map showA . take n . getZipList $ x
 
--- | Shows a 'CReal' with the desired precision.
-showCReal :: Int -> CReal -> String
-showCReal p = showA . require p
+-- | Shows a 'CR' with the desired precision.
+showCR :: Int -> CR -> String
+showCR p = showA . require p
+
+-- There is no show instance of 'CR' since the representation would be infinite. We can therefore not satisfy (read . show) = id.
+
+-- | Reads a floating point representation of a real number and interprets
+-- that as a CR. Does not currently allow for the same format output by
+-- 'showCR'.
+instance Read CR where
+  readsPrec _ input =
+    let (intPart, rest) = span isDigit input
+    in if null rest || head rest /= '.'
+       then [(CR $ pure (Approx (read intPart :: Integer) 0 0), rest)]
+       else let (fracPart, rest') = span isDigit (tail rest)
+            in [((CR $ pure (Approx (read (intPart ++ fracPart) :: Integer) 0 0)) / 10^(length fracPart), rest')]
 
 -- | Check that an approximation has at least /d/ bits of precision. This is
 -- used to bail out of computations where the size of approximation grow
@@ -1436,145 +1462,145 @@ showCReal p = showA . require p
 ok :: Int -> Approx -> Approx
 ok d a = if precision a > fromIntegral d then a else Bottom
 
--- | Given a 'CReal' this functions finds an approximation of that number to
+-- | Given a 'CR' this functions finds an approximation of that number to
 -- within the precision required.
-require :: Int -> CReal -> Approx
-require d x = head . dropWhile (== Bottom) . getZipList $ ok d <$> x
+require :: Int -> CR -> Approx
+require d (CR x) = head . dropWhile (== Bottom) . getZipList $ ok d <$> x
 
--- | Gives a 'Double' approximation of a 'CReal' number.
-toDouble :: CReal -> Maybe Double
+-- | Gives a 'Double' approximation of a 'CR' number.
+toDouble :: CR -> Maybe Double
 toDouble = toDoubleA . require (54+errorBits)
 
-fromDouble :: Double -> CReal
+fromDouble :: Double -> CR
 fromDouble x =
   let (m, s) = decodeFloat x
   -- When the mantissa of a floating point is interpreted as a whole number
   -- instead of as a fraction in the IEEE 754 encoding the exponent 972
   -- corresponds to 1024, which is what IEEE 754 use to encode infinity and
   -- NaN.
-  in if (m == 972) then pure Bottom
-     else pure (Approx m 1 s)
+  in if (m == 972) then CR $ pure Bottom
+     else CR $ pure (Approx m 1 s)
 
-fromDoubleAsExactValue :: Double -> CReal
+fromDoubleAsExactValue :: Double -> CR
 fromDoubleAsExactValue x =
   let (m, s) = decodeFloat x
   -- When the mantissa of a floating point is interpreted as a whole number
   -- instead of as a fraction in the IEEE 754 encoding the exponent 972
   -- corresponds to 1024, which is what IEEE 754 use to encode infinity and
   -- NaN.
-  in if (m == 972) then pure Bottom
-     else pure (Approx m 0 s)
+  in if (m == 972) then CR $ pure Bottom
+     else CR $ pure (Approx m 0 s)
 
 transposeZipList :: [ZipList a] -> ZipList [a]
 transposeZipList = ZipList . transpose . map getZipList
 
 -- | Evaluate a polynomial, given as a list of its coefficients, at the given point.
-polynomial :: [CReal] -> CReal -> CReal
-polynomial as x = 
-    (\as' x' l -> ok 10 . limitAndBound l $ poly as' x') <$> transposeZipList as <*> x <*> resources
+polynomial :: [CR] -> CR -> CR
+polynomial as (CR x) = 
+    CR $ (\as' x' l -> ok 10 . limitAndBound l $ poly as' x') <$> transposeZipList (map unCR as) <*> x <*> resources
 
 -- | Computes the sum of a Taylor series, given as a list of its coefficients,
 -- at the given point.
-taylorCR :: [CReal] -> CReal -> CReal
-taylorCR as x =
-    (\as' x' l -> sum . takeWhile nonZeroCentredA . map (limitAndBound l) $ zipWith (*) as' (pow x'))
-    <$> transposeZipList as <*> x <*> resources
+taylorCR :: [CR] -> CR -> CR
+taylorCR as (CR x) =
+    CR $ (\as' x' l -> sum . takeWhile nonZeroCentredA . map (limitAndBound l) $ zipWith (*) as' (pow x'))
+    <$> transposeZipList (map unCR as) <*> x <*> resources
 
-epsilon :: CReal
-epsilon = Approx 0 1 . negate <$> resources
+epsilon :: CR
+epsilon = CR $ Approx 0 1 . negate <$> resources
 
 -- | The square root function. Lifted from square root application on 'Approx'
 -- approximations.
-sqrtCR :: CReal -> CReal
-sqrtCR x = (\a l -> ok 10 . limitAndBound l $ sqrtA (-l) a) <$> x <*> resources
+sqrtCR :: CR -> CR
+sqrtCR (CR x) = CR $ (\a l -> ok 10 . limitAndBound l $ sqrtA (-l) a) <$> x <*> resources
 
 alternateSign :: Num a => [a] -> [a]
 alternateSign = zipWith (*) (cycle [1,-1])
 
-atanCR :: CReal -> CReal
+atanCR :: CR -> CR
 atanCR x =
   let rr y = y / (1 + sqrt (1 + x^2))
       x' = rr . rr . rr $ x -- range reduction so that |a'| < 1/4
       x2 = - x'^2
-      t = epsilon + x * taylorCR (map ((1/) . fromIntegral) [1,3..]) x2
-  in boundErrorTerm . (8*) <$> t
+      (CR t) = epsilon + x * taylorCR (map ((1/) . fromIntegral) [1,3..]) x2
+  in CR $ boundErrorTerm . (8*) <$> t
 --  let x2 = x^2
 --           in epsilon + x * taylor (map (1/) . alternateSign . map fromInteger $ [1,3..]) x2
 
--- | π computed using Machin's formula. Computed directly on 'CReal'.
-piCRMachin :: CReal
+-- | π computed using Machin's formula. Computed directly on 'CR'.
+piCRMachin :: CR
 piCRMachin = 4*(4*atanCR (1/5)-atanCR (1/239))
 
 -- | π computed using Machin's formula. Computed on 'Approx' approximations.
-piMachinCR :: CReal
-piMachinCR = piMachinA . negate <$> resources
+piMachinCR :: CR
+piMachinCR = CR $ piMachinA . negate <$> resources
 
 -- | π computed using Borwein's formula. Computed on 'Approx' approximations.
-piBorweinCR :: CReal
-piBorweinCR = piBorweinA . negate <$> resources
+piBorweinCR :: CR
+piBorweinCR = CR $ piBorweinA . negate <$> resources
 
 -- | π computed using binary splitting. Computed on 'Approx' approximations.
-piBinSplitCR :: CReal
-piBinSplitCR = limitAndBound <$> resources <*> (require <$> resources <*> ZipList (repeat (ZipList piRaw)))
+piBinSplitCR :: CR
+piBinSplitCR = CR $ limitAndBound <$> resources <*> (require <$> resources <*> ZipList (repeat (CR $ ZipList piRaw)))
 
 -- | The constant ln 2.
-ln2 :: CReal
-ln2 = log2A . negate <$> resources
+ln2 :: CR
+ln2 = CR $ log2A . negate <$> resources
 
 -- | The exponential computed using Taylor's series. Computed directly on
--- 'CReal'. Will have poor behaviour on larger inputs as no range reduction is
+-- 'CR'. Will have poor behaviour on larger inputs as no range reduction is
 -- performed.
-expCR :: CReal -> CReal
+expCR :: CR -> CR
 expCR = (+ epsilon) . taylorCR (map (1/) $ fac)
 
-halfPi :: CReal
-halfPi = pure (Approx 1 0 (-1)) * pi
+halfPi :: CR
+halfPi = scale pi (-1)
 
-sinRangeReduction :: CReal -> CReal
-sinRangeReduction x = (subtract halfPi) . abs . (pi -) . abs . (subtract halfPi) $ modA <$> x <*> 2 * pi
+sinRangeReduction :: CR -> CR
+sinRangeReduction (CR x) = (subtract halfPi) . abs . (pi -) . abs . (subtract halfPi) . CR $ modA <$> x <*> unCR (2 * pi)
 
-sinRangeReduction2 :: CReal -> CReal
-sinRangeReduction2 x = let k = (\a -> case a of 
-                                        (Approx m _ s) -> max 0 $ 8 * (integerLog2 m + s + 3) `div` 5
-                                        Bottom -> 0) <$> x
-                           y = sinCRTaylor (x / (fromIntegral . (3^) <$> k))
-                           step z = z*(3-4*z^2)
-                       in (\y' k' l -> limitAndBound l $ foldr ($) y' (replicate k' step)) <$> y <*> k <*> resources
+sinRangeReduction2 :: CR -> CR
+sinRangeReduction2 (CR x) =
+  let k = (\a -> case a of 
+                   (Approx m _ s) -> max 0 $ 8 * (integerLog2 m + s + 3) `div` 5
+                   Bottom -> 0) <$> x
+      (CR y) = sinCRTaylor ((CR x) / (CR $ fromIntegral . (3^) <$> k))
+      step z = z*(3-4*z^2)
+  in CR $ (\y' k' l -> limitAndBound l $ foldr ($) y' (replicate k' step)) <$> y <*> k <*> resources
 
 -- | The sine function computed using Taylor's series. Computed directly on
--- 'CReal'. Will have poor behaviour on larger inputs as no range reduction is
+-- 'CR'. Will have poor behaviour on larger inputs as no range reduction is
 -- performed.
-sinCRTaylor :: CReal -> CReal
+sinCRTaylor :: CR -> CR
 sinCRTaylor x = let x2 = x^2
                 in epsilon + x * taylorCR (map (1/) $ alternateSign oddFac) x2
 
 -- | The sine function computed using Taylor's series. Computed directly on
--- 'CReal'.
-sinCR :: CReal -> CReal
+-- 'CR'.
+sinCR :: CR -> CR
 sinCR = sinRangeReduction2 . sinRangeReduction
 
 -- | The cosine function computed using Taylor's series. Computed directly on
--- 'CReal'.
-cosCR :: CReal -> CReal
+-- 'CR'.
+cosCR :: CR -> CR
 cosCR = sinCR . (halfPi -)
 
-instance Floating CReal where
-    sqrt x = sqrtA <$> resources <*> x
-    pi = piBinSplitCR
-    exp x = expA <$> resources <*> x
-    log x = logA <$> resources <*> x -- logAgmA is an alternative
-    sin x = sinA <$> resources <*> x
-    cos x = cosA <$> resources <*> x
-    asin x = 2 * (atan (x / (1 + (sqrt (1 - x^2)))))
-    acos x = halfPi - asin x
-    atan x = atanA <$> resources <*> x
-    sinh x = ((exp x) - (exp $ negate x)) / 2
-    cosh x = ((exp x) + (exp $ negate x)) / 2
-    tanh x = let t = exp (2*x) in (t-1)/(t+1)
-    asinh x = log (x + sqrt (x^2 + 1))
-    acosh x = logA <$> resources <*> x + sqrt (x^2 - 1)
-    atanh x = (logA <$> resources <*> (1+x) / (1-x)) / 2
+instance Floating CR where
+  sqrt (CR x) = CR $ sqrtA <$> resources <*> x
+  pi = piBinSplitCR
+  exp (CR x) = CR $ expA <$> resources <*> x
+  log (CR x) = CR $ logA <$> resources <*> x
+  sin (CR x) = CR $ sinA <$> resources <*> x
+  cos (CR x) = CR $ cosA <$> resources <*> x
+  asin x = 2 * (atan (x / (1 + (sqrt (1 - x^2)))))
+  acos x = halfPi - asin x
+  atan (CR x) = CR $ atanA <$> resources <*> x
+  sinh x = ((exp x) - (exp $ negate x)) / 2
+  cosh x = ((exp x) + (exp $ negate x)) / 2
+  tanh x = let t = exp (2*x) in (t-1)/(t+1)
+  asinh x = log (x + sqrt (x^2 + 1))
+  acosh x = CR $ logA <$> resources <*> unCR (x + sqrt (x^2 - 1))
+  atanh x = (CR $ logA <$> resources <*> unCR ((1+x) / (1-x))) / 2
 
-
-instance PartialOrd CReal where
-    partialCompare a b = head . dropWhile (== Nothing) . getZipList $ partialCompare <$> a <*> b
+instance PartialOrd CR where
+  partialCompare (CR a) (CR b) = head . dropWhile (== Nothing) . getZipList $ partialCompare <$> a <*> b

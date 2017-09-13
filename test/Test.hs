@@ -180,8 +180,8 @@ qcPropA = testGroup "(checked by quickcheck)"
   , QC.testProperty "values" $ \a -> let types = a :: Approx in collect a True
 
 -- There's something wrong in sqrtA at the moment. Possibly in converge in sqrtRecD.
---  , QC.testProperty "sqr . sqrt" $ \a -> let b = abs a in b `better` sqrA (sqrtA 0 b)
---  , QC.testProperty "sqrt . sqr" $ \a -> abs a `better` sqrtA 0 (sqrA a)
+  , QC.testProperty "sqr . sqrt" $ \a -> let b = abs a in b `better` sqrA (sqrtA 0 b)
+  , QC.testProperty "sqrt . sqr" $ \a -> abs a `better` sqrtA 0 (sqrA a)
   ]
 
 creal :: TestTree

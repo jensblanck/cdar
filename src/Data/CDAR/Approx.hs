@@ -774,8 +774,14 @@ sqrtRecA k a@(Approx m e s)
                 in Approx n' n' t
   | otherwise = let (Finite p) = significance a
                     s' = s `quot` 2 - p - errorBits
-                    l@(n:^t) = sqrtRecD s' ((m-e):^s)
-                    (n':^t') = sqrtRecD' s' ((m+e):^s) l
+                    (n:^t) = sqrtRecD s' ((m-e):^s)
+                    -- We have tried to use sqrtRecD' with the above value as
+                    -- a first approximation to the result. However, the low
+                    -- endpoint may be too far away as a starting value to
+                    -- ensure convergence to the right root. It's possible
+                    -- that if we swap the order we would be fine. But as it
+                    -- is, this computes a new first approximation.
+                    (n':^t') = sqrtRecD s' ((m+e):^s)
                 in endToApprox (Finite ((n-1):^t)) (Finite ((n'+1):^t'))
 
 {-|

@@ -12,7 +12,7 @@ is difficult as it takes some extra precision to produce the right result.
 The usage of showCRealN is to show the underlying computations; it is not
 intended way to use CReal.
 -}
-module ExamplesRump where
+module ExamplesRump (examplesRump) where
 
 import Data.CDAR
 

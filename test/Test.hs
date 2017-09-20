@@ -146,6 +146,8 @@ scPropA = testGroup "(checked by smallcheck)"
                             in (a `better` b) && (s >= -2)
             Bottom       -> better a (limitSize 2 a)
   , SC.testProperty "sqrt" $ \a -> let b = abs a in better b $ (sqrtA 0 b)^2
+  , SC.testProperty "recipA" $ \a -> let b = abs a in 0 `approximatedBy` b || (lowerBound (recipA 100 b) * upperBound b <= 1
+                                                                               && upperBound (recipA 100 b) * lowerBound b >= 1)
   ]
 
 qcPropA :: TestTree
@@ -182,6 +184,8 @@ qcPropA = testGroup "(checked by quickcheck)"
 -- There's something wrong in sqrtA at the moment. Possibly in converge in sqrtRecD.
   , QC.testProperty "sqr . sqrt" $ \a -> let b = abs a in b `better` sqrA (sqrtA 0 b)
   , QC.testProperty "sqrt . sqr" $ \a -> abs a `better` sqrtA 0 (sqrA a)
+  , QC.testProperty "recipA" $ \a -> let b = abs a in 0 `approximatedBy` b || (lowerBound (recipA 100 b) * upperBound b <= 1
+                                                                               && upperBound (recipA 100 b) * lowerBound b >= 1)
   ]
 
 creal :: TestTree
@@ -248,12 +252,12 @@ qcPropCR = testGroup "(checked by quickCheck)"
   , QC.testProperty "sqrt . ^2" $ \x -> checkCRN 5 (abs x) (sqrt (x^2))
   , QC.testProperty "log . exp" $ \x -> checkCRN 5 x (log (exp x))
   , QC.testProperty "exp . log" $ QC.forAll (genCROpen 0 100) $ \x -> checkCRN 5 x (exp (log x))
-  , QC.testProperty "asin . sin" $ QC.forAll (genCROpen (-pi) pi) $ \x -> checkCRN 5 x (asin (sin x))
+  , QC.testProperty "asin . sin" $ QC.forAll (genCROpen (-pi/2) (pi/2)) $ \x -> checkCRN 5 x (asin (sin x))
   , QC.testProperty "sin . asin" $ QC.forAll (genCROpen (-1) 1) $ \x -> checkCRN 5 x (sin (asin x))
-  , QC.testProperty "acos . cos" $ QC.forAll (genCROpen 0 (2*pi)) $ \x -> checkCRN 5 x (acos (cos x))
+  , QC.testProperty "acos . cos" $ QC.forAll (genCROpen 0 pi) $ \x -> checkCRN 5 x (acos (cos x))
   , QC.testProperty "cos . acos" $ QC.forAll (genCROpen (-1) 1) $ \x -> checkCRN 5 x (cos (acos x))
   , QC.testProperty "atan . tan" $ QC.forAll (genCROpen (-pi/2) (pi/2)) $ \x -> checkCRN 5 x (atan (tan x))
-  , QC.testProperty "tan . atan" $ \x -> checkCRN 5 x (tan (atan x))
+  , QC.testProperty "tan . atan" $ \x -> checkCRN 1 x (tan (atan x))
   , QC.testProperty "asinh . sinh" $ \x -> checkCRN 5 x (asinh (sinh x))
   , QC.testProperty "sinh . asinh" $ \x -> checkCRN 5 x (sinh (asinh x))
   , QC.testProperty "acosh . cosh" $ QC.forAll (genCRClosed 0 10) $ \x -> checkCRN 5 x (acosh (cosh x))

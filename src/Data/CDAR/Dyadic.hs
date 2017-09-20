@@ -183,8 +183,6 @@ ln2D t = let t' = t - 10 - 2 * integerLog2 (fromIntegral (abs t))
              e = takeWhile (/= 0) . map (shiftD t') $ zipWith (*) d c
          in shiftD t $ sum e
 
--- test case showing that log . exp /= id: Approx 6046642733321808 0 (-43)
--- now that works, but this does not: -7.10579218615256280600078753195703029632568359375
 logD :: Int -> Dyadic -> Dyadic
 logD t x@(a :^ s) =
   if a <= 0 then error "logD: Non-positive argument"

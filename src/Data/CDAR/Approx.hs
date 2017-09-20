@@ -19,6 +19,8 @@ module Data.CDAR.Approx (Approx(..)
                         ,endToApprox
                         ,lowerBound
                         ,upperBound
+                        ,lowerA
+                        ,upperA
                         ,centre
                         ,radius
                         ,diameter
@@ -58,6 +60,7 @@ module Data.CDAR.Approx (Approx(..)
                         ,expTaylorA
                         ,expTaylorA'
                         ,logA
+                        ,logInternal
                         ,logBinarySplittingA
                         ,logTaylorA
                         ,sinTaylorA
@@ -68,6 +71,7 @@ module Data.CDAR.Approx (Approx(..)
                         ,atanA
                         ,sinBinarySplittingA
                         ,cosBinarySplittingA
+                        ,atanBinarySplittingA
                         ,atanTaylorA
                         ,piRaw
                         ,piA
@@ -108,10 +112,11 @@ import           Data.CDAR.Classes
 import           Data.CDAR.Dyadic
 import           Data.CDAR.Extended
 import           Data.CDAR.IntegerLog
-import           Data.CDAR.POrd
 import           Data.Char (intToDigit)
 import           Data.List (findIndex, intersperse, transpose, unfoldr, zipWith4)
 import           Data.Ratio
+
+import Debug.Trace
 
 -- |A type synonym. Used to denote number of bits after binary point.
 type Precision = Int
@@ -218,10 +223,10 @@ expected precision of approximations increase very quickly.
 
 ==The actual data type
 
-In fact, 'ZipList' 'Approx' is used as the implementation of infinite
-sequences of approximations, as that allows for applicative style.
-Hopefully, it is not needed to access the internal representation of
-'CR' directly.
+In fact, the type 'CR' is a newtype of 'ZipList' 'Approx' in the
+implementation of infinite sequences of approximations, as that allows for
+applicative style. Hopefully, it is not needed to access the internal
+representation of 'CR' directly.
 -}
 newtype CR = CR {unCR :: ZipList Approx}
 
@@ -360,6 +365,14 @@ lowerBound Bottom = NegInf
 upperBound :: Approx -> Extended Dyadic
 upperBound (Approx m e s) = Finite ((m+e):^s)
 upperBound Bottom = PosInf
+
+lowerA :: Approx -> Approx
+lowerA Bottom = Bottom
+lowerA (Approx m e s) = Approx (m-e) 0 s
+
+upperA :: Approx -> Approx
+upperA Bottom = Bottom
+upperA (Approx m e s) = Approx (m+e) 0 s
 
 -- |Gives the mid-point of an approximation as a 'Maybe' 'Dyadic' number.
 centre :: Approx -> Maybe Dyadic
@@ -535,15 +548,15 @@ instance Ord Approx where
         | otherwise                           = error "compare: comparisons are partial on Approx"
     compare _ _ = error "compare: comparisons are partial on Approx"
 
-instance IntervalOrd Approx where
-    intervalCompare _a _b = error "Is this used?" -- intervalCompare (toEDI a) (toEDI b)
+-- instance IntervalOrd Approx where
+--     intervalCompare _a _b = error "Is this used?" -- intervalCompare (toEDI a) (toEDI b)
 
-instance PartialOrd Approx where
-    partialCompare a b = f $ intervalCompare a b
-        where f Equal = Just EQ
-              f LessThan = Just LT
-              f GreaterThan = Just GT
-              f _ = Nothing
+-- instance PartialOrd Approx where
+--     partialCompare a b = f $ intervalCompare a b
+--         where f Equal = Just EQ
+--               f LessThan = Just LT
+--               f GreaterThan = Just GT
+--               f _ = Nothing
 
 -- |The 'toRational' function is partial since there is no good rational
 -- number to return for the trivial approximation 'Bottom'.
@@ -774,15 +787,15 @@ sqrtRecA k a@(Approx m e s)
                 in Approx n' n' t
   | otherwise = let (Finite p) = significance a
                     s' = s `quot` 2 - p - errorBits
-                    (n:^t) = sqrtRecD s' ((m-e):^s)
+                    (n:^t) = sqrtRecD s' ((m-e):^s) -- upper bound of result
                     -- We have tried to use sqrtRecD' with the above value as
                     -- a first approximation to the result. However, the low
                     -- endpoint may be too far away as a starting value to
                     -- ensure convergence to the right root. It's possible
                     -- that if we swap the order we would be fine. But as it
                     -- is, this computes a new first approximation.
-                    (n':^t') = sqrtRecD s' ((m+e):^s)
-                in endToApprox (Finite ((n-1):^t)) (Finite ((n'+1):^t'))
+                    (n':^t') = sqrtRecD s' ((m+e):^s) -- lower bound of result
+                in endToApprox (Finite ((n'+1):^t')) (Finite ((n-1):^t))
 
 {-|
 The starting values for newton iterations can be found using the auxiliary function findStartingValues below.
@@ -999,20 +1012,37 @@ expTaylorA' res (Approx m e s) =
 
 {-|
 
-Computing the logarithm of an approximation. This is chooses the fastest implementation.
+Computing the logarithm of an approximation. This chooses the fastest implementation.
 
 More thorough benchmarking is desirable.
 
 Binary splitting is faster than Taylor. AGM should be used over ~1000 bits.
 -}
 logA :: Precision -> Approx -> Approx
+-- This implementation asks for the dyadic approximation of the endpoints, we
+-- should instead use that, after the first range reduction, the derivative is
+-- less than 3/2 on the interval, so it easy to just compute one expensive
+-- computation. We could even make use of the fact that the derivative on the
+-- interval x is bounded by 1/x to get a tighter bound on the error.
 logA _ Bottom = Bottom
-logA p (Approx m e s)
-  | m > e =
-    let (n :^ t) = logD (negate p) $ (m-e) :^ s
-        (n' :^ t') = logD (negate p) $ (m+e) :^ s
-    in endToApprox (Finite ((n-1):^t)) (Finite ((n'+1):^t'))
+logA p x@(Approx m e _)
+  | m > e = logInternal p x
+--    let (n :^ t) = logD (negate p) $ (m-e) :^ s
+--        (n' :^ t') = logD (negate p) $ (m+e) :^ s
+--    in endToApprox (Finite ((n-1):^t)) (Finite ((n'+1):^t'))
   | otherwise = Bottom
+
+logInternal :: Int -> Approx -> Approx
+logInternal _ Bottom = error "LogInternal: impossible"
+logInternal p (Approx m e s) =
+  let t' = (negate p) - 10 - max 0 (integerLog2 m + s) -- (5 + size of argument) guard digits
+      r = s + integerLog2 (3*m) - 1
+      x = scale (m :^ s) (-r) -- 2/3 <= x' <= 4/3
+      y = divD' t' (x - 1) (x + 1) -- so |y| <= 1/5
+      (n :^ s') = flip scale 1 $ atanhD t' y
+      (e' :^ s'') = divD' t' (e:^(s-r)) x -- Estimate error term.
+      res = Approx n (scale (e' + 1) (s'' - s')) s'
+  in boundErrorTerm $ res + fromIntegral r * log2A t'
 
 -- | Logarithm by binary splitting summation of Taylor series.
 logBinarySplittingA :: Precision -> Approx -> Approx
@@ -1089,10 +1119,6 @@ sinA = sinTaylorA
 cosA :: Precision -> Approx -> Approx
 cosA res x = sinA res ((Approx 1 0 (-1)) * piA res - x)
 
--- | Computes the arc tangent of an approximation. Chooses the best implementation.
-atanA :: Precision -> Approx -> Approx
-atanA = atanBinarySplittingA
-
 -- | Computes the sine of an approximation by binary splitting summation of Taylor series.
 --
 -- Begins by reducing the interval to [0,π/4].
@@ -1135,6 +1161,10 @@ cosBinarySplittingA res a =
          7 -> cosInRangeA res (_pi * fromDyadic (1:^(-2)) - a2)
          _ -> error "Impossible"
 
+-- | Computes the arc tangent of an approximation. Chooses the best implementation.
+atanA :: Precision -> Approx -> Approx
+atanA = atanTaylorA
+
 -- | Computes the arc tangent of an approximation by binary splitting summation of Taylor series.
 atanBinarySplittingA :: Precision -> Approx -> Approx
 atanBinarySplittingA _ Bottom = Bottom
@@ -1156,19 +1186,56 @@ atanBinarySplittingA res a =
       nextTerm = Approx 1 0 (-2*n)
   in boundErrorTerm . (8*) $ fudge (t * recipA res (fromIntegral b*q)) nextTerm
 
--- | Computes the arc tangent of an approximation by summation of Taylor series.
+-- + Bottom
+-- + Deal with sign -- Because of next line, not worthwhile
+-- + if lowerbound(abs a) > 2 then pi/2 - atan (1/a) -- Don't want to do this, what if 0 \in a?
+-- + else
+--   - r = min res (significance a)
+--   - k = floor (sqrt r) / 2 `min` 2 (guarantee |x| < 1/2)
+--   - x = rr^k(a)
+--   - taylor (r + k + 5) (-x^2) [1,3..]
+--   - (x*)
+--   - same error as x
+--   - (2^k *)
+
 atanTaylorA :: Precision -> Approx -> Approx
 atanTaylorA _ Bottom = Bottom
 atanTaylorA res a =
-  let rr x = x * recipA res (1 + sqrtA res (1 + sqrA x))
-      a' = rr . rr . rr $ a -- range reduction so that |a'| < 1/4
-      a2 = - sqrA a'
-      res' = case (significance a) of
-               (Finite _r) -> min res _r
-               _ -> res
---      Finite res' = min (significance a) (Finite res)
-      t = taylorA res' (map (recipA res') [1,3..]) a2
-  in boundErrorTerm . (8*) $ t
+  let (Finite r) = min (pure res) (significance a)
+      k = min (floor (sqrt (fromIntegral r)) `div` 2) 2
+      res' = res + k + 5
+      rr _x = _x * recipA res' (1 + sqrtA res' (1 + sqrA _x))
+      x = boundErrorTerm $ iterate rr a !! k
+      x2 = negate (sqrA x)
+      t = boundErrorTerm $ x * taylorA res' (map (recipA res') [1,3..]) x2
+  in scale t k
+
+-- > let x = fromDouble (-0.2939788524332769)
+-- > require 10 $ x
+-- Approx (-5295852201093248) 1 (-54)
+-- > require 10 . tan $ atan x
+-- Approx (-10845905307838971904) 907 (-65)
+-- > scale (-5295852201093248) 11
+-- -10845905307838971904
+--
+-- problemet är att 1 måste skalas till 2^11, men blev bara 907
+--
+-- Men problemet verkar vara i tan, inte i atan.
+
+
+-- | Computes the arc tangent of an approximation by summation of Taylor series.
+-- atanTaylorA :: Precision -> Approx -> Approx
+-- atanTaylorA _ Bottom = Bottom
+-- atanTaylorA res a =
+--   let rr x = x * recipA res (1 + sqrtA res (1 + sqrA x))
+--       a' = rr . rr . rr $ a -- range reduction so that |a'| < 1/4
+--       a2 = - sqrA a'
+--       res' = case (significance a) of
+--                (Finite _r) -> min res _r
+--                _ -> res
+-- --      Finite res' = min (significance a) (Finite res)
+--       t = taylorA res' (map (recipA res') [1,3..]) a2
+--   in boundErrorTerm . (8*) $ t
 
 {-
 swapSinCos :: Precision -> Approx -> Approx
@@ -1608,5 +1675,5 @@ instance Floating CR where
   acosh x = CR $ logA <$> resources <*> unCR (x + sqrt (x^2 - 1))
   atanh x = (CR $ logA <$> resources <*> unCR ((1+x) / (1-x))) / 2
 
-instance PartialOrd CR where
-  partialCompare (CR a) (CR b) = head . dropWhile (== Nothing) . getZipList $ partialCompare <$> a <*> b
+-- instance PartialOrd CR where
+--   partialCompare (CR a) (CR b) = head . dropWhile (== Nothing) . getZipList $ partialCompare <$> a <*> b

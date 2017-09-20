@@ -20,7 +20,7 @@ library
       Data.CDAR
     , Data.CDAR.Classes
     , Data.CDAR.Extended
-    , Data.CDAR.POrd
+--    , Data.CDAR.POrd
     , Data.CDAR.Approx
     , Data.CDAR.Dyadic
 --    , Data.CDAR.Interval

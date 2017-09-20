@@ -22,25 +22,25 @@ logMap2 (Approx m e s) =
 orbit :: Fractional a => Rational -> [a]
 orbit c = iterate (logMap c) (fromRational (1%8))
 
-orbit2 :: Rational -> [CReal]
-orbit2 c = iterate (((fromRational c)*) . fmap logMap2) (fromRational (1%8))
+orbit2 :: Rational -> [CR]
+orbit2 c = iterate (((fromRational c)*) . CR . fmap logMap2 . unCR) (fromRational (1%8))
 
 suite :: [Benchmark]
 suite = [
     bgroup "Logistic 4" [
       bench "Double" $ nf (!! 10000) (orbit 4 :: [Double])
-    , bench "CReal" $ nf (require 10 . (!! 10000)) (orbit 4 :: [CReal])
-    , bench "CReal (2)" $ nf (require 10 . (!! 10000)) (orbit2 4 :: [CReal])
+    , bench "CR" $ nf (require 10 . (!! 10000)) (orbit 4 :: [CR])
+    , bench "CR (2)" $ nf (require 10 . (!! 10000)) (orbit2 4 :: [CR])
     ],
     bgroup "Logistic 3.5" [
       bench "Double" $ nf (!! 10000) (orbit (7%2) :: [Double])
-    , bench "CReal" $ nf (require 10 . (!! 10000)) (orbit (7%2) :: [CReal])
-    , bench "CReal (2)" $ nf (require 10 . (!! 10000)) (orbit2 (7%2) :: [CReal])
+    , bench "CR" $ nf (require 10 . (!! 10000)) (orbit (7%2) :: [CR])
+    , bench "CR (2)" $ nf (require 10 . (!! 10000)) (orbit2 (7%2) :: [CR])
     ],
     bgroup "Logistic 3" [
       bench "Double" $ nf (!! 10000) (orbit 3 :: [Double])
-    , bench "CReal" $ nf (require 10 . (!! 10000)) (orbit 3 :: [CReal])
-    , bench "CReal (2)" $ nf (require 10 . (!! 10000)) (orbit2 3 :: [CReal])
+    , bench "CR" $ nf (require 10 . (!! 10000)) (orbit 3 :: [CR])
+    , bench "CR (2)" $ nf (require 10 . (!! 10000)) (orbit2 3 :: [CR])
     ]
   ]
 
@@ -182,7 +182,7 @@ threadSuite u v =
   ]
 
 main :: IO ()
-main = defaultMain $ last newSuite :[] --newSuite ++ suite
+main = defaultMain $ newSuite -- ++ suite
 
 {- Are threads making criterion confused, times seem ok, but reported as unreliable.
 

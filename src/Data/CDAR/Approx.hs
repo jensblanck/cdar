@@ -22,6 +22,7 @@ module Data.CDAR.Approx (Approx(..)
                         ,lowerA
                         ,upperA
                         ,centre
+                        ,centreA
                         ,radius
                         ,diameter
                         ,exact
@@ -366,10 +367,12 @@ upperBound :: Approx -> Extended Dyadic
 upperBound (Approx m e s) = Finite ((m+e):^s)
 upperBound Bottom = PosInf
 
+-- |Gives the lower bound of an 'Approx' as an exact 'Approx'.
 lowerA :: Approx -> Approx
 lowerA Bottom = Bottom
 lowerA (Approx m e s) = Approx (m-e) 0 s
 
+-- |Gives the upper bound of an 'Approx' as an exact 'Approx'.
 upperA :: Approx -> Approx
 upperA Bottom = Bottom
 upperA (Approx m e s) = Approx (m+e) 0 s
@@ -378,6 +381,11 @@ upperA (Approx m e s) = Approx (m+e) 0 s
 centre :: Approx -> Maybe Dyadic
 centre (Approx m _ s) = Just (m:^s)
 centre _ = Nothing
+
+-- |Gives the centre of an 'Approx' as an exact 'Approx'.
+centreA :: Approx -> Approx
+centreA Bottom = Bottom
+centreA (Approx m e s) = Approx (m+e) 0 s
 
 -- |Gives the radius of an approximation as a 'Dyadic' number. Currently a
 -- partial function. Should be made to return an 'Extended' 'Dyadic'.
@@ -492,17 +500,17 @@ instance Fractional Approx where
 recipA :: Precision -> Approx -> Approx
 recipA _ Bottom = Bottom
 recipA t (Approx m e s)
-    | e == 0      = let s' = 2*s + t + 5 + integerLog2 (abs m)
+    | e == 0      = let s' = integerLog2 (abs m)
                     in Approx
-                         (round (bit (s'-2*s) % m))
+                         (round (bit (s'+t+2) % m))
                          1
-                         (s-s')
+                         (-s-s'-t-2)
     | (abs m) > e = let d = m*m-e*e
                         d2 = unsafeShiftR d 1
-                        s' = 2 * (integerLog2 m + errorBits)
+                        s' = integerLog2 d + 2 * errorBits
                     in boundErrorTerm $ Approx
                            ((unsafeShiftL m s' + d2) `div` d)
-                           ((unsafeShiftL e s' + d2) `div` d)
+                           ((unsafeShiftL e s' + d2+1) `div` d + 1)
                            (-s-s')
     --  (abs m) > e = let d = m*m-e*e
     --                     s' = 2 * (integerLog2 m + errorBits)
@@ -526,7 +534,7 @@ modA :: Approx -> Approx -> Approx
 modA (Approx m e s) (Approx n f t) =
     let r = min s t
         (d,m') = divMod (unsafeShiftL m (s-r)) (unsafeShiftL n (t-r))
-        e' = e + abs d * f
+        e' = scale e (s-r) + abs d * scale f (t-r)
     in Approx m' e' r
 modA _ _ = Bottom
 
@@ -548,18 +556,11 @@ instance Ord Approx where
         | otherwise                           = error "compare: comparisons are partial on Approx"
     compare _ _ = error "compare: comparisons are partial on Approx"
 
--- instance IntervalOrd Approx where
---     intervalCompare _a _b = error "Is this used?" -- intervalCompare (toEDI a) (toEDI b)
-
--- instance PartialOrd Approx where
---     partialCompare a b = f $ intervalCompare a b
---         where f Equal = Just EQ
---               f LessThan = Just LT
---               f GreaterThan = Just GT
---               f _ = Nothing
-
 -- |The 'toRational' function is partial since there is no good rational
 -- number to return for the trivial approximation 'Bottom'.
+--
+-- Note that converting to a rational number will give only a single rational
+-- point. Do not expect to be able to recover the interval from this value.
 instance Real Approx where
     toRational (Approx m e s) = approxRational
                                   (toRational (m:^s))
@@ -1086,7 +1087,7 @@ logTaylorA res (Approx m e s) =
                   [1,3..]
         in boundErrorTerm $ 2 * t + fromIntegral r * log2A (-res')
 
--- Sine computed by Taylor expansion after 2 step range reduction.
+-- Sine computed by Taylor expansion after 2 stage range reduction.
 
 -- | Computes sine by summation of Taylor series after two levels of range reductions.
 sinTaylorA :: Precision -> Approx -> Approx
@@ -1096,20 +1097,20 @@ sinTaylorA res = sinTaylorRed2A res . sinTaylorRed1A res
 sinTaylorRed1A :: Precision -> Approx -> Approx
 sinTaylorRed1A res a = 
   let _pi = piA res
-      _halfPi = _pi * (Approx 1 0 (-1))
-  in (subtract _halfPi) . abs . (_pi -) . abs . (subtract _halfPi) . modA a $ 2*_pi
-
+      _halfPi = scale _pi (-1)
+      x = (subtract _halfPi) . abs . (_pi -) . abs . (subtract _halfPi) . modA a $ 2*_pi
+  in x
+  
 -- | Second level of range reduction for sine.
 sinTaylorRed2A :: Precision -> Approx -> Approx
 sinTaylorRed2A _ Bottom = Bottom
-sinTaylorRed2A res a = 
-  let k = 4 --max 0 ((integerLog2 m + s + 3) * 8 `div` 5)
+sinTaylorRed2A res a@(Approx m _ s) = 
+  let k = max 0 (integerLog2 m + s + (floor . sqrt $ fromIntegral res))
       a' = a * recipA res (3^k)
       a2 = negate $ sqrA a'
---      t = taylor res (iterate (a2 *) a') (scanl1 (*) $ 1:map (\n -> n*(n+1)) [2,4..])
       t = taylorA res (map (recipA res) oddFac) a2
       step x = boundErrorTerm $ x * (3 - 4 * sqrA x)
-  in limitAndBound res . step . step . step . step . boundErrorTerm $ t * a' --(!! k) . iterate (step) . boundErrorTerm $ t * a'
+  in limitAndBound res . (!! k) . iterate step . boundErrorTerm $ t * a'
 
 -- | Computes the sine of an approximation. Chooses the best implementation.
 sinA :: Precision -> Approx -> Approx
@@ -1674,6 +1675,3 @@ instance Floating CR where
   asinh x = log (x + sqrt (x^2 + 1))
   acosh x = CR $ logA <$> resources <*> unCR (x + sqrt (x^2 - 1))
   atanh x = (CR $ logA <$> resources <*> unCR ((1+x) / (1-x))) / 2
-
--- instance PartialOrd CR where
---   partialCompare (CR a) (CR b) = head . dropWhile (== Nothing) . getZipList $ partialCompare <$> a <*> b

@@ -180,8 +180,6 @@ qcPropA = testGroup "(checked by quickcheck)"
                             in (a `better` b) && (s >= -2)
             Bottom       -> better a (limitSize 2 a)
   , QC.testProperty "values" $ \a -> let types = a :: Approx in collect a True
-
--- There's something wrong in sqrtA at the moment. Possibly in converge in sqrtRecD.
   , QC.testProperty "sqr . sqrt" $ \a -> let b = abs a in b `better` sqrA (sqrtA 0 b)
   , QC.testProperty "sqrt . sqr" $ \a -> abs a `better` sqrtA 0 (sqrA a)
   , QC.testProperty "recipA" $ \a -> let b = abs a in 0 `approximatedBy` b || (lowerBound (recipA 100 b) * upperBound b <= 1
@@ -232,6 +230,14 @@ instance Show CR where
 checkCRN :: Int -> CR -> CR -> Bool
 checkCRN n (CR x) (CR y) = and $ zipWith better (take n $ getZipList x) (take n $ getZipList y)
 
+checkFun :: (CR -> CR) -> CR -> Bool
+checkFun f x = let a = require 1 x
+                   l = lowerA a
+                   u = upperA a
+                   fx = require 1 (f x)
+               in better (require 200 . f . CR . pure $ l) fx &&
+                  better (require 200 . f . CR . pure $ u) fx
+
 propertiesCR :: TestTree
 propertiesCR = testGroup "Properties of CReal" [scPropCR, qcPropCR]
 
@@ -264,6 +270,22 @@ qcPropCR = testGroup "(checked by quickCheck)"
   , QC.testProperty "cosh . acosh" $ QC.forAll (genCRClosed 1 10) $ \x -> checkCRN 5 x (cosh (acosh x))
   , QC.testProperty "atanh . tanh" $ QC.forAll (genCRClosed (-100) 100) $ \x -> checkCRN 5 x (atanh (tanh x))
   , QC.testProperty "tanh . atanh" $ QC.forAll (genCROpen (-1) 1) $ \x -> checkCRN 5 x (tanh (atanh x))
+  , QC.testProperty "recip . recip" $ \x -> checkCRN 5 x (1/(1/x))
+  , QC.testProperty "sqrt" $ QC.forAll (genCRClosed 0 100) $ checkFun sqrt
+  , QC.testProperty "sin" $ checkFun sin
+  , QC.testProperty "cos" $ checkFun cos
+  , QC.testProperty "tan" $ checkFun tan
+  , QC.testProperty "exp" $ QC.forAll (genCRClosed (-100) 100) $ checkFun exp
+  , QC.testProperty "log" $ QC.forAll (genCROpen 0 100) $ checkFun log
+  , QC.testProperty "asin" $ QC.forAll (genCRClosed (-1) 1) $ checkFun asin
+  , QC.testProperty "acos" $ QC.forAll (genCRClosed (-1) 1) $ checkFun asin
+  , QC.testProperty "atan" $ checkFun atan
+  , QC.testProperty "sinh" $ QC.forAll (genCRClosed (-100) 100) $ checkFun sinh
+  , QC.testProperty "asinh" $ checkFun asinh
+  , QC.testProperty "cosh" $ QC.forAll (genCRClosed 0 10) $ checkFun cosh
+  , QC.testProperty "acosh" $ QC.forAll (genCRClosed 1 10) $ checkFun acosh
+  , QC.testProperty "tanh" $ QC.forAll (genCRClosed (-10) 10) $ checkFun tanh
+  , QC.testProperty "atanh" $ QC.forAll (genCROpen (-1) 1) $ checkFun atanh
   ]
 
 unitTests = testGroup "Unit tests"

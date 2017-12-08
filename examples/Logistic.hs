@@ -16,7 +16,7 @@ main = do
                 f' = tail f
                 l = length f'
             in (read (i++f') :: CR) / (10^l)
-          else 4
+          else scale 1961 (-9)
   printf "Constant is %s.\n" $ showA . require 10 $ c  
   printf "\nComputing %d iterations of the map.\nIt may take some seconds...\n" n
   printf "\nAfter %d iterations the value is %s\n" n $ showA . limitSize 34 . require 34 $ (orbitC2 c)!!n

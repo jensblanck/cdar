@@ -142,10 +142,10 @@ Executable examples
     -- , parallel >=3.2 && <3.3
   default-language: Haskell2010
 
--- Executable logistic
---   hs-source-dirs:	examples
---   main-is:		Logistic.hs
---   build-depends:        base, cdar
---   default-language:	Haskell2010
+Executable logistic
+  hs-source-dirs:	examples
+  main-is:		Logistic.hs
+  build-depends:        base, cdar
+  default-language:	Haskell2010
 
 --SinBorwein, Time, 

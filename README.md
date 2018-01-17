@@ -24,7 +24,7 @@ Each computable real can be viewed as an infinite list of rapidly shrinking inte
 
 * [**MPFR**](https://hackage.haskell.org/package/hmpfr-0.4.3/docs/Data-Number-MPFR.html) Arbitrary precision floating point numbers with specified rounding modes. While arbitrary precision can be used it is still fixed for a computation so this is still floating point arithmetic, but with larger precision.
 
-* [**AERN-real**](https://hackage.haskell.org/package/AERN-Real) Status unknown.
+* [**AERN2**](https://hackage.haskell.org/package/aern2-real) Computable real numbers using Cauchy sequences with a fixed modulus.
 
 * [**ireal**](http://hackage.haskell.org/package/ireal) Computable real numbers using Cauchy sequences with a fixed modulus.
 
@@ -33,6 +33,10 @@ Each computable real can be viewed as an infinite list of rapidly shrinking inte
 * [**exact-real**](http://hackage.haskell.org/package/exact-real) Computable real numbers using Cauchy sequences with a fixed modulus.
 
 * **ERA** (Can't find a link at the moment) Computable real number using Cauchy sequences with computable modulus.
+
+## Comparison with ireal and AERN2
+
+(https://github.com/michalkonecny/haskell-reals-comparison)
 
 ## Installation
 

@@ -385,7 +385,7 @@ centre _ = Nothing
 -- |Gives the centre of an 'Approx' as an exact 'Approx'.
 centreA :: Approx -> Approx
 centreA Bottom = Bottom
-centreA (Approx m e s) = Approx (m+e) 0 s
+centreA (Approx m e s) = Approx m 0 s
 
 -- |Gives the radius of an approximation as a 'Dyadic' number. Currently a
 -- partial function. Should be made to return an 'Extended' 'Dyadic'.

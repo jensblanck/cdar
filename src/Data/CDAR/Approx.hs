@@ -102,7 +102,11 @@ module Data.CDAR.Approx (Approx(..)
                         ,sinCR
                         ,cosCR
                         ,sqrtCR
-                        ,expCR) where
+                        ,expCR
+                        ,compareA
+                        ,compareCR
+                        ,caseA
+                        ,caseCR) where
 
 import           Control.Applicative (ZipList (..))
 import           Control.DeepSeq
@@ -117,7 +121,7 @@ import           Data.Char (intToDigit)
 import           Data.List (findIndex, intersperse, transpose, unfoldr, zipWith4)
 import           Data.Ratio
 
-import Debug.Trace
+--import Debug.Trace
 
 -- |A type synonym. Used to denote number of bits after binary point.
 type Precision = Int
@@ -385,7 +389,7 @@ centre _ = Nothing
 -- |Gives the centre of an 'Approx' as an exact 'Approx'.
 centreA :: Approx -> Approx
 centreA Bottom = Bottom
-centreA (Approx m e s) = Approx m 0 s
+centreA (Approx m _ s) = Approx m 0 s
 
 -- |Gives the radius of an approximation as a 'Dyadic' number. Currently a
 -- partial function. Should be made to return an 'Extended' 'Dyadic'.
@@ -549,12 +553,16 @@ divModA (Approx m e s) (Approx n f t) =
     in (fromIntegral d, Approx m' e' r)
 divModA _ _ = (Bottom, Bottom)
 
+-- | Compare 'Approx' with a partial result.
+compareA :: Approx -> Approx -> Maybe Ordering
+compareA (Approx m e s) (Approx n f t)
+  | abs ((m:^s)-(n:^t)) > (e:^s)+(f:^t) = Just $ compare (m:^s) (n:^t)
+  | otherwise                           = Nothing
+compareA _ _ = Nothing
+
 -- |Not a proper Ord type as Approx are intervals.
 instance Ord Approx where
-    compare (Approx m e s) (Approx n f t)
-        | abs ((m:^s)-(n:^t)) > (e:^s)+(f:^t) = compare (m:^s) (n:^t)
-        | otherwise                           = error "compare: comparisons are partial on Approx"
-    compare _ _ = error "compare: comparisons are partial on Approx"
+  compare x y = maybe (error "compare: comparisons are partial on Approx") id $ compareA x y
 
 -- |The 'toRational' function is partial since there is no good rational
 -- number to return for the trivial approximation 'Bottom'.
@@ -1552,7 +1560,7 @@ fromDouble x =
   -- instead of as a fraction in the IEEE 754 encoding the exponent 972
   -- corresponds to 1024, which is what IEEE 754 use to encode infinity and
   -- NaN.
-  in if (m == 972) then CR $ pure Bottom
+  in if (s == 972) then CR $ pure Bottom
      else CR $ pure (Approx m 1 s)
 
 fromDoubleAsExactValue :: Double -> CR
@@ -1562,7 +1570,7 @@ fromDoubleAsExactValue x =
   -- instead of as a fraction in the IEEE 754 encoding the exponent 972
   -- corresponds to 1024, which is what IEEE 754 use to encode infinity and
   -- NaN.
-  in if (m == 972) then CR $ pure Bottom
+  in if (s == 972) then CR $ pure Bottom
      else CR $ pure (Approx m 0 s)
 
 transposeZipList :: [ZipList a] -> ZipList [a]
@@ -1675,3 +1683,39 @@ instance Floating CR where
   asinh x = log (x + sqrt (x^2 + 1))
   acosh x = CR $ logA <$> resources <*> unCR (x + sqrt (x^2 - 1))
   atanh x = (CR $ logA <$> resources <*> unCR ((1+x) / (1-x))) / 2
+
+-- | Partial comparison operation on 'CR'.
+compareCR :: CR -> CR -> ZipList (Maybe Ordering)
+compareCR (CR x) (CR y) = compareA <$> x <*> y
+
+{-| The ordering on computable reals is not decidable so our orderings of
+'Approx' and 'CR' are partial. We can avoid partiality if we accept
+non-determinism. The case operations 'caseA' and 'caseCR' allow us to look
+through a list of conditions and return the value associated with the first
+successful condition. These operations are not monotonic in the ordering of
+approximations.
+-}
+
+-- | The arguments to 'caseA' should be a list of lists. The second level of
+-- lists should have 3 elements each, i.e., argument should have the form
+-- [[x1,y1,z1],...,[xn,yn,zn]]. The first i such that xi > yi causes the case
+-- statement to return zi. Note that this is non-monotonic since better
+-- approximations may make xj > yj for some j < i.
+caseA :: [[Approx]] -> Approx
+caseA [] = Bottom
+caseA ((x:y:z:_) : as) =
+  if compareA x y == Just GT
+  then z
+  else caseA as
+caseA (_:_) = Bottom
+
+-- | The arguments to 'caseCR' should be a list of lists. The second level of
+-- lists should have 3 elements each, i.e., argument should have the form
+-- [[x1,y1,z1],...,[xn,yn,zn]]. Any zi for which xi > yi may be returned.
+-- Since 'caseA' is non-monotonic this is as well. Which means that different
+-- zi can be approximated in various parts of the sequence of approximations
+-- in CR. One way to interpret this behaviour is that the result of this
+-- operation is /non-deterministic/.
+caseCR :: [[CR]] -> CR
+caseCR as =
+  CR $ caseA <$> transposeZipList (fmap transposeZipList (fmap (fmap unCR) as))

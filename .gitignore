@@ -14,4 +14,5 @@ cabal.config
 Test
 stack.yaml
 cdar.log
+bench.html
 .stack-work/

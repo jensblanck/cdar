@@ -106,7 +106,11 @@ module Data.CDAR.Approx (Approx(..)
                         ,compareA
                         ,compareCR
                         ,caseA
-                        ,caseCR) where
+                        ,caseCR
+                        ,floorA
+                        ,ceilingA
+                        ,floorCR
+                        ,ceilingCR) where
 
 import           Control.Applicative (ZipList (..))
 import           Control.DeepSeq
@@ -1688,6 +1692,16 @@ instance Floating CR where
 compareCR :: CR -> CR -> ZipList (Maybe Ordering)
 compareCR (CR x) (CR y) = compareA <$> x <*> y
 
+{-|
+= Non-deterministic operations
+
+Some operations on 'CR' can for theoretical reasons not be made total. For
+example, equality, ordering and inverse are all partial functions on 'CR'. To
+avoid partiality we may allow non-determinism for parts of the computation. It
+would be the programmers responsibility to ensure singlevaluedness if that is
+desired.
+-}
+
 {-| The ordering on computable reals is not decidable so our orderings of
 'Approx' and 'CR' are partial. We can avoid partiality if we accept
 non-determinism. The case operations 'caseA' and 'caseCR' allow us to look
@@ -1719,3 +1733,27 @@ caseA (_:_) = Bottom
 caseCR :: [[CR]] -> CR
 caseCR as =
   CR $ caseA <$> transposeZipList (fmap transposeZipList (fmap (fmap unCR) as))
+
+-- | The floor of an 'Approx'.
+floorA :: Approx -> Approx
+floorA Bottom = Bottom
+floorA (Approx m e s) =
+  let k = max (-s) 0
+      l = Finite . fromInteger $ (m-e) `div` (scale 1 k)
+      u = Finite . fromInteger $ (m+e) `div` (scale 1 k)
+  in endToApprox l u
+
+-- | The ceiling of an 'Approx'.
+ceilingA :: Approx -> Approx
+ceilingA Bottom = Bottom
+ceilingA (Approx m e s) =
+  let k = max (-s) 0
+      l = Finite . fromInteger . (+1) $ (m-e-1) `div` (scale 1 k)
+      u = Finite . fromInteger . (+1) $ (m+e-1) `div` (scale 1 k)
+  in endToApprox l u
+
+floorCR :: CR -> CR
+floorCR (CR x) = CR $ floorA <$> x
+
+ceilingCR :: CR -> CR
+ceilingCR (CR x) = CR $ ceilingA <$> x

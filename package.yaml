@@ -1,6 +1,7 @@
 name: cdar
 version: 0.1.0.0
 synopsis: Exact real arithmetic using Centred Dyadic Approximations.
+description: cdar provides Exact real arithmetic using Centred Dyadic Approximations.
 license: BSD3
 license-file: LICENSE
 author: Jens Blanck

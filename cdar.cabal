@@ -1,14 +1,15 @@
 cabal-version: 1.12
 
--- This file has been generated from package.yaml by hpack version 0.31.0.
+-- This file has been generated from package.yaml by hpack version 0.31.1.
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: e9121b8a64b56407756097f4f692939c5db90715d924c2962183cf52b7d2ca7a
+-- hash: 544bc2291e94fa894b7eabca45ea50b4b3ac0667398e4f14f6bf325f9e1c58d1
 
 name:           cdar
 version:        0.1.0.0
 synopsis:       Exact real arithmetic using Centred Dyadic Approximations.
+description:    cdar provides Exact real arithmetic using Centred Dyadic Approximations.
 category:       Data
 author:         Jens Blanck
 maintainer:     jens.blanck@gmail.com

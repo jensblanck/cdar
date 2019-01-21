@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 544bc2291e94fa894b7eabca45ea50b4b3ac0667398e4f14f6bf325f9e1c58d1
+-- hash: 866b1fc94cb1f0f83448efcbe1f64714a8c74d278e99de8304d1c030a3bfa41f
 
 name:           cdar
 version:        0.1.0.0
@@ -44,7 +44,7 @@ executable examples
   other-modules:
       ExamplesRump
   hs-source-dirs:
-      examples/
+      examples
   ghc-options: -Wall -fno-warn-type-defaults -O2
   build-depends:
       base
@@ -54,15 +54,25 @@ executable examples
     , integer-gmp
   default-language: Haskell2010
 
-executable logistic
-  main-is: Logistic.hs
+executable lll
+  main-is: examples/Lll.hs
   other-modules:
-      ExamplesRump
-      Main
       Paths_cdar
-  hs-source-dirs:
-      examples/
   ghc-options: -Wall -fno-warn-type-defaults -O2
+  build-depends:
+      base
+    , cdar
+    , containers
+    , deepseq
+    , integer-gmp
+    , mtl
+  default-language: Haskell2010
+
+executable logistic
+  main-is: examples/Logistic.hs
+  other-modules:
+      Paths_cdar
+  ghc-options: -Wall -fno-warn-type-defaults -O2 -Wunused-top-binds
   build-depends:
       base
     , cdar
@@ -97,7 +107,6 @@ benchmark bench
   type: exitcode-stdio-1.0
   main-is: bench.hs
   other-modules:
-      BinSplitPar
       Paths_cdar
   hs-source-dirs:
       bench/

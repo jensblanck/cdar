@@ -1,5 +1,5 @@
 {-# LANGUAGE NoMonomorphismRestriction #-}
-module Main where
+--module Logistic where
 
 import Data.CDAR
 import Data.Bits

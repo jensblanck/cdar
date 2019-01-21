@@ -51,14 +51,22 @@ benchmarks:
     source-dirs:       bench/
     ghc-options: -O2 -rtsopts
 
+#source-dirs: examples
+
 executables:
+  lll:
+    main: examples/Lll.hs
+    dependencies:
+      - cdar
+      - mtl
+#    ghc-options: -Wunused-top-bind -Wunused-imports
   logistic:
-    source-dirs: examples/
-    main: Logistic.hs
+    main: examples/Logistic.hs
     dependencies: cdar
+    ghc-options: -Wunused-top-binds
   examples:
-    source-dirs: examples/
     main: Main.hs
-    other-modules: ExamplesRump
     dependencies: cdar
+    source-dirs: examples
+    other-modules: ExamplesRump
     

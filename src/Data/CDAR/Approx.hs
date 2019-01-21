@@ -107,10 +107,14 @@ module Data.CDAR.Approx (Approx(..)
                         ,compareCR
                         ,caseA
                         ,caseCR
+                        ,selectA
+                        ,selectCR
                         ,floorA
                         ,ceilingA
                         ,floorCR
-                        ,ceilingCR) where
+                        ,ceilingCR
+                        ,limCR
+                        ,unitError) where
 
 import           Control.Applicative (ZipList (..))
 import           Control.DeepSeq
@@ -122,6 +126,7 @@ import           Data.CDAR.Dyadic
 import           Data.CDAR.Extended
 import           Data.CDAR.IntegerLog
 import           Data.Char (intToDigit)
+import           Data.Maybe (fromJust, isNothing)
 import           Data.List (findIndex, intersperse, transpose, unfoldr, zipWith4)
 import           Data.Ratio
 
@@ -1500,8 +1505,8 @@ resources = ZipList $ iterate bumpLimit startLimit
 --     show = show . require 40
 
 instance Num CR where
-    (CR x) + (CR y) = CR $ (\a b l -> ok 10 $ limitAndBound l (a + b)) <$> x <*> y <*> resources
-    (CR x) * (CR y) = CR $ (\a b l -> ok 10 $ limitAndBound l (a * b)) <$> x <*> y <*> resources
+    (CR x) + (CR y) = CR $ (\a b l -> ok (-100) $ limitAndBound l (a + b)) <$> x <*> y <*> resources
+    (CR x) * (CR y) = CR $ (\a b l -> ok (-100) $ limitAndBound l (a * b)) <$> x <*> y <*> resources
     negate (CR x) = CR $ negate <$> x
     abs (CR x) = CR $ abs <$> x
     signum (CR x) = CR $ signum <$> x
@@ -1734,6 +1739,12 @@ caseCR :: [[CR]] -> CR
 caseCR as =
   CR $ caseA <$> transposeZipList (fmap transposeZipList (fmap (fmap unCR) as))
 
+selectA :: [Approx] -> Maybe Int
+selectA = findIndex (== Just GT) . map (`compareA` 0)
+
+selectCR :: [CR] -> Int
+selectCR as = fromJust . head . dropWhile isNothing . getZipList $ selectA <$> transposeZipList (fmap unCR as)
+
 -- | The floor of an 'Approx'.
 floorA :: Approx -> Approx
 floorA Bottom = Bottom
@@ -1757,3 +1768,17 @@ floorCR (CR x) = CR $ floorA <$> x
 
 ceilingCR :: CR -> CR
 ceilingCR (CR x) = CR $ ceilingA <$> x
+
+-- | Limit of a sequence of fast converging 'CR's. It is the callers
+-- responsibility that 'f n' is within '2^^(-n)' for all n.
+--
+-- The implementation just follows the diagonal. Since the resource bound
+-- grows very quickly within 'CR' it is likely that we index far into this
+-- sequence. With the current list implementation this may be slow. We may
+-- choose to use a different structure for the sequence or we may have a
+-- version that requires faster convergence.
+limCR :: (Int -> CR) -> CR
+limCR f = CR . ZipList $ [let p = getZipList resources !! n in (getZipList . unCR) (scale unitError (-p) + f p) !! n | n <- [0..]]
+
+unitError :: CR
+unitError = CR . pure $ Approx 0 1 0

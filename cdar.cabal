@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 866b1fc94cb1f0f83448efcbe1f64714a8c74d278e99de8304d1c030a3bfa41f
+-- hash: 6ccaf86f9eee638268be7bb7ea7b9cd29f7e8a582af3c0b816ed93ad2c14b8f0
 
 name:           cdar
 version:        0.1.0.0
@@ -66,6 +66,7 @@ executable lll
     , deepseq
     , integer-gmp
     , mtl
+    , parsec
   default-language: Haskell2010
 
 executable logistic

@@ -107,6 +107,7 @@ module Data.CDAR.Approx (Approx(..)
                         ,compareCR
                         ,caseA
                         ,caseCR
+                        ,Select (..)
                         ,selectA
                         ,selectCR
                         ,floorA
@@ -126,7 +127,6 @@ import           Data.CDAR.Dyadic
 import           Data.CDAR.Extended
 import           Data.CDAR.IntegerLog
 import           Data.Char (intToDigit)
-import           Data.Maybe (fromJust, isNothing)
 import           Data.List (findIndex, intersperse, transpose, unfoldr, zipWith4)
 import           Data.Ratio
 
@@ -1739,11 +1739,27 @@ caseCR :: [[CR]] -> CR
 caseCR as =
   CR $ caseA <$> transposeZipList (fmap transposeZipList (fmap (fmap unCR) as))
 
-selectA :: [Approx] -> Maybe Int
-selectA = findIndex (== Just GT) . map (`compareA` 0)
+-- | Data type for returning possible results of a select operation. 'Unknown'
+-- is similar to 'Nothing' for 'Maybe'. 'None' confirms that none of the
+-- alternatives can be selected.
+data Select = Unknown | None | Select Int deriving (Eq,Ord,Read,Show)
 
-selectCR :: [CR] -> Int
-selectCR as = fromJust . head . dropWhile isNothing . getZipList $ selectA <$> transposeZipList (fmap unCR as)
+-- | Tries to select a positive 'Approx' from a list. If all are negative,
+-- then 'None' is returned. If one is positive, then the index of it is
+-- returned. Otherwise, there is at least one 'Approx' containing zero so we
+-- can only return 'Unknown'.
+selectA :: [Approx] -> Select
+selectA as = let rs = fmap (`compareA` 0) as
+             in if all (== Just LT) rs
+                then None
+                else maybe Unknown Select $ findIndex (== Just GT) rs
+
+-- | Tries to select a positive 'CR' from a list. If all are negative, then
+-- 'None' is returned. If one is positive, then the index of it is returned.
+-- Otherwise, there is at least one 'CR' containing zero so the computation
+-- will diverge.
+selectCR :: [CR] -> Select
+selectCR as = head . dropWhile (== Unknown) . getZipList $ selectA <$> transposeZipList (fmap unCR as)
 
 -- | The floor of an 'Approx'.
 floorA :: Approx -> Approx
@@ -1778,7 +1794,8 @@ ceilingCR (CR x) = CR $ ceilingA <$> x
 -- choose to use a different structure for the sequence or we may have a
 -- version that requires faster convergence.
 limCR :: (Int -> CR) -> CR
-limCR f = CR . ZipList $ [let p = getZipList resources !! n in (getZipList . unCR) (scale unitError (-p) + f p) !! n | n <- [0..]]
+limCR f = CR . ZipList $ [let p = getZipList resources !! n
+                          in (getZipList . unCR) (scale unitError (-p) + f p) !! n | n <- [0..]]
 
 unitError :: CR
 unitError = CR . pure $ Approx 0 1 0

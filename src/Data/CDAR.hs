@@ -1,4 +1,4 @@
-{-| Convenience module importing and reexporting the 'CReal' data type of
+{-| Convenience module importing and reexporting the 'CR' data type of
 computable real numbers and the underlying data type including the centred
 dyadic approximations 'Approx'.
 

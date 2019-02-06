@@ -59,6 +59,7 @@ executables:
     dependencies:
       - cdar
       - mtl
+      - parsec
 #    ghc-options: -Wunused-top-bind -Wunused-imports
   logistic:
     main: examples/Logistic.hs

@@ -1,7 +1,7 @@
 --module Lll where
 {-# LANGUAGE FlexibleContexts #-}
 
---import Control.Monad.State
+--import Control.Monad
 import Data.CDAR
 import Data.Foldable (toList)
 --import Data.Int
@@ -9,6 +9,7 @@ import Data.Sequence (Seq (..))
 import Data.Sequence as S
 --import Data.Word
 import Text.Parsec as P
+import Text.Parsec.String (Parser)
 
 type U = Int -- Word64
 type I = Int -- Int64
@@ -50,10 +51,33 @@ data Op
 
 data Result = Success PgmState | Error String | Result PgmState
 
---pident :: ParsecT () Char () String
---pident = many alphaNum
+pident :: Parser String
+pident = (:) <$> letter <*> many alphaNum
 
---plabel = pident <* char ':'
+plabel :: Parser String
+plabel = pident <* char ':'
+
+peol :: Parser ()
+peol = (whitespace *> optional (char '#' *> many (noneOf "\r\n"))) <* endOfLine
+
+whitespace :: Parser String
+whitespace = many (oneOf " \t")
+
+pline :: Parser (String, Op)
+pline = (,) <$> (whitespace *> plabel) <*> (whitespace *> pop)
+
+pint :: Parser I
+pint = read <$> (whitespace *> many1 (oneOf "-0123456789"))
+
+puns :: Parser U
+puns = read <$> (whitespace *> many1 (oneOf "0123456789"))
+
+pop :: Parser Op
+pop = whitespace *> choice [try pdup, try pop]
+
+pdup,pdrop :: Parser Op
+pdup = Dup <$> (string "dup" *> puns) <*> puns
+pdrop = Pop <$> (string "pop" *> puns)
 
 step :: Op -> PgmState -> Result
 step op s@(PgmState _p cpc st rst) =

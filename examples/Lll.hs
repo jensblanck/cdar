@@ -46,10 +46,12 @@ data Op
   | Ipush I | Ineg | Iadd | Imul | Idiv | Isgn
   | Zconv | Zneg | Zadd | Zmul | Zdiv | Zsgn | Zsh
   | Rconv | Rneg | Radd | Rmul | Rdiv | Rsh | Rch | Rlim U
-  | Entc | Lvc U
+  | Entc | Lvc U | None
   deriving (Eq,Ord,Read,Show)
 
 data Result = Success PgmState | Error String | Result PgmState
+
+-- Parser
 
 pident :: Parser String
 pident = (:) <$> letter <*> many alphaNum
@@ -58,26 +60,50 @@ plabel :: Parser String
 plabel = pident <* char ':'
 
 peol :: Parser ()
-peol = (whitespace *> optional (char '#' *> many (noneOf "\r\n"))) <* endOfLine
+peol = optional (char '#' *> many (noneOf "\r\n")) <* lexeme endOfLine
 
 whitespace :: Parser String
 whitespace = many (oneOf " \t")
 
-pline :: Parser (String, Op)
-pline = (,) <$> (whitespace *> plabel) <*> (whitespace *> pop)
+lexeme :: Parser a -> Parser a
+lexeme p = p <* whitespace
+
+pline :: Parser (Maybe String, Op)
+pline = (,) <$> optionMaybe (try (lexeme plabel)) <*> option Main.None (lexeme pop)
 
 pint :: Parser I
-pint = read <$> (whitespace *> many1 (oneOf "-0123456789"))
+pint = read <$> many1 (oneOf "-0123456789") <* whitespace
 
 puns :: Parser U
-puns = read <$> (whitespace *> many1 (oneOf "0123456789"))
+puns = read <$> many1 (oneOf "0123456789") <* whitespace
 
 pop :: Parser Op
-pop = whitespace *> choice [try pdup, try pop]
+pop = choice [try pdup, try ppop]
 
-pdup,pdrop :: Parser Op
-pdup = Dup <$> (string "dup" *> puns) <*> puns
-pdrop = Pop <$> (string "pop" *> puns)
+keyword :: String -> Parser String
+keyword s = lexeme (string s)
+
+pdup,ppop :: Parser Op
+pdup = Dup <$> (keyword "dup" *> puns) <*> puns
+ppop = Pop <$> (keyword "pop" *> puns)
+
+  -- = Dup U U | Pop U | Rot U U
+  -- | Apush U | Scall U | Dcall | Ret | Jmp U | Jnz U
+  -- | Ipush I | Ineg | Iadd | Imul | Idiv | Isgn
+  -- | Zconv | Zneg | Zadd | Zmul | Zdiv | Zsgn | Zsh
+  -- | Rconv | Rneg | Radd | Rmul | Rdiv | Rsh | Rch | Rlim U
+  -- | Entc | Lvc U | None
+  -- deriving (Eq,Ord,Read,Show)
+
+maybeToList :: [(Maybe String, Op)] -> [([String], Op)]
+maybeToList = map f
+  where f (a,b) = (toList a, b)
+
+removeNone :: [([String], Op)] -> [([String], Op)]
+removeNone [] = []
+removeNone _ = undefined
+
+-- Interpreter
 
 step :: Op -> PgmState -> Result
 step op s@(PgmState _p cpc st rst) =

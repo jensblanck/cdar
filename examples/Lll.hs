@@ -46,7 +46,7 @@ data Op
   | Ipush I | Ineg | Iadd | Imul | Idiv | Isgn
   | Zconv | Zneg | Zadd | Zmul | Zdiv | Zsgn | Zsh
   | Rconv | Rneg | Radd | Rmul | Rdiv | Rsh | Rch | Rlim U
-  | Entc | Lvc U | Noop
+  | Entc | Lvc U | Noop | Unresolved Op String
   deriving (Eq,Ord,Read,Show)
 
 data Result = Success PgmState | Error String | Result PgmState
@@ -78,14 +78,20 @@ puns :: Parser U
 puns = read <$> many1 (oneOf "0123456789") <* whitespace
 
 pop :: Parser Op
-pop = choice [try pdup, try ppop]
+pop = choice $ map try
+      [ Dup <$> (keyword "dup" *> puns) <*> puns
+      , Pop <$> (keyword "pop" *> puns)
+      , Rot <$> (keyword "rot" *> puns) <*> puns
+      , Unresolved (Apush 0) <$> (keyword "apush" *> pident)
+      , Unresolved (Scall 0) <$> (keyword "scall" *> pident)
+      , Dcall <$ keyword "dcall"
+      , Ret <$ keyword "ret"
+      , Unresolved (Jmp 0) <$> (keyword "jmp" *> pident)
+      , Unresolved (Jnz 0) <$> (keyword "jnz" *> pident)
+      ]
 
 keyword :: String -> Parser String
 keyword s = lexeme (string s)
-
-pdup,ppop :: Parser Op
-pdup = Dup <$> (keyword "dup" *> puns) <*> puns
-ppop = Pop <$> (keyword "pop" *> puns)
 
   -- = Dup U U | Pop U | Rot U U
   -- | Apush U | Scall U | Dcall | Ret | Jmp U | Jnz U
@@ -99,6 +105,13 @@ removeNoop :: [String] -> [(Maybe String, Op)] -> [([String], Op)]
 removeNoop _ [] = []
 removeNoop ls ((l, Noop) : rows) = removeNoop (toList l ++ ls) rows
 removeNoop ls ((l, x) : rows) = (toList l ++ ls, x) : removeNoop [] rows
+
+extractLabels :: [[String]] -> [(String,U)]
+extractLabels ls = let as = Prelude.zip ls [0..]
+                       f (xs, n) = map (flip (,) n) xs
+                   in concatMap f as
+
+--resolveLabels [Op]
 
 -- Interpreter
 

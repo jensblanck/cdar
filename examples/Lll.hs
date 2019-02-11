@@ -46,7 +46,7 @@ data Op
   | Ipush I | Ineg | Iadd | Imul | Idiv | Isgn
   | Zconv | Zneg | Zadd | Zmul | Zdiv | Zsgn | Zsh
   | Rconv | Rneg | Radd | Rmul | Rdiv | Rsh | Rch | Rlim U
-  | Entc | Lvc U | None
+  | Entc | Lvc U | Noop
   deriving (Eq,Ord,Read,Show)
 
 data Result = Success PgmState | Error String | Result PgmState
@@ -69,7 +69,7 @@ lexeme :: Parser a -> Parser a
 lexeme p = p <* whitespace
 
 pline :: Parser (Maybe String, Op)
-pline = (,) <$> optionMaybe (try (lexeme plabel)) <*> option Main.None (lexeme pop)
+pline = (,) <$> optionMaybe (try (lexeme plabel)) <*> option Noop (lexeme pop)
 
 pint :: Parser I
 pint = read <$> many1 (oneOf "-0123456789") <* whitespace
@@ -95,13 +95,10 @@ ppop = Pop <$> (keyword "pop" *> puns)
   -- | Entc | Lvc U | None
   -- deriving (Eq,Ord,Read,Show)
 
-maybeToList :: [(Maybe String, Op)] -> [([String], Op)]
-maybeToList = map f
-  where f (a,b) = (toList a, b)
-
-removeNone :: [([String], Op)] -> [([String], Op)]
-removeNone [] = []
-removeNone _ = undefined
+removeNoop :: [String] -> [(Maybe String, Op)] -> [([String], Op)]
+removeNoop _ [] = []
+removeNoop ls ((l, Noop) : rows) = removeNoop (toList l ++ ls) rows
+removeNoop ls ((l, x) : rows) = (toList l ++ ls, x) : removeNoop [] rows
 
 -- Interpreter
 

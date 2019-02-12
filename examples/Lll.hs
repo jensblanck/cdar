@@ -111,7 +111,24 @@ extractLabels ls = let as = Prelude.zip ls [0..]
                        f (xs, n) = map (flip (,) n) xs
                    in concatMap f as
 
---resolveLabels [Op]
+resolveLabels :: [([String],Op)] -> [Op]
+resolveLabels xs =
+  let (ls, os) = Prelude.unzip xs
+  in map (res (extractLabels ls)) os
+  where res els (Unresolved (Apush _) l) = maybe (error "Label not found") Apush (Prelude.lookup l els)
+        res els (Unresolved (Scall _) l) = maybe (error "Label not found") Scall (Prelude.lookup l els)
+        res els (Unresolved (Jmp _) l) = maybe (error "Label not found") Jmp (Prelude.lookup l els)
+        res els (Unresolved (Jnz _) l) = maybe (error "Label not found") Jnz (Prelude.lookup l els)
+        res _ x = x
+
+pprogram :: Parser [(Maybe String, Op)]
+pprogram = whitespace *> sepBy pline peol
+
+loadProgram :: FilePath -> IO [Op]
+loadProgram name = do
+  p <- readFile name
+  let rows = parse pprogram name p
+  return . resolveLabels . removeNoop [] . either undefined id $ rows
 
 -- Interpreter
 

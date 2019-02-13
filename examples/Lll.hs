@@ -88,18 +88,33 @@ pop = choice $ map try
       , Ret <$ keyword "ret"
       , Unresolved (Jmp 0) <$> (keyword "jmp" *> pident)
       , Unresolved (Jnz 0) <$> (keyword "jnz" *> pident)
+      , Ipush <$> (keyword "ipush" *> pint)
+      , Ineg <$ keyword "ineg"
+      , Iadd <$ keyword "iadd"
+      , Imul <$ keyword "imul"
+      , Idiv <$ keyword "idiv"
+      , Isgn <$ keyword "isgn"
+      , Zconv <$ keyword "zconv"
+      , Zneg <$ keyword "zneg"
+      , Zadd <$ keyword "zadd"
+      , Zmul <$ keyword "zmul"
+      , Zdiv <$ keyword "zdiv"
+      , Zsgn <$ keyword "zsgn"
+      , Zsh <$ keyword "zsh"
+      , Rconv <$ keyword "rconv"
+      , Rneg <$ keyword "rneg"
+      , Radd <$ keyword "radd"
+      , Rmul <$ keyword "rmul"
+      , Rdiv <$ keyword "rdiv"
+      , Rsh <$ keyword "rsh"
+      , Rch <$ keyword "rch"
+      , Unresolved (Rlim 0) <$> (keyword "rlim" *> pident)
+      , Entc <$ keyword "entc"
+      , Lvc <$> (keyword "lvc" *> puns)
       ]
 
 keyword :: String -> Parser String
 keyword s = lexeme (string s)
-
-  -- = Dup U U | Pop U | Rot U U
-  -- | Apush U | Scall U | Dcall | Ret | Jmp U | Jnz U
-  -- | Ipush I | Ineg | Iadd | Imul | Idiv | Isgn
-  -- | Zconv | Zneg | Zadd | Zmul | Zdiv | Zsgn | Zsh
-  -- | Rconv | Rneg | Radd | Rmul | Rdiv | Rsh | Rch | Rlim U
-  -- | Entc | Lvc U | None
-  -- deriving (Eq,Ord,Read,Show)
 
 removeNoop :: [String] -> [(Maybe String, Op)] -> [([String], Op)]
 removeNoop _ [] = []
@@ -119,13 +134,14 @@ resolveLabels xs =
         res els (Unresolved (Scall _) l) = maybe (error "Label not found") Scall (Prelude.lookup l els)
         res els (Unresolved (Jmp _) l) = maybe (error "Label not found") Jmp (Prelude.lookup l els)
         res els (Unresolved (Jnz _) l) = maybe (error "Label not found") Jnz (Prelude.lookup l els)
+        res els (Unresolved (Rlim _) l) = maybe (error "Label not found") Rlim (Prelude.lookup l els)
         res _ x = x
 
 pprogram :: Parser [(Maybe String, Op)]
 pprogram = whitespace *> sepBy pline peol
 
-loadProgram :: FilePath -> IO [Op]
-loadProgram name = do
+readProgram :: FilePath -> IO [Op]
+readProgram name = do
   p <- readFile name
   let rows = parse pprogram name p
   return . resolveLabels . removeNoop [] . either undefined id $ rows
@@ -227,6 +243,11 @@ interpret t =
     (Main.Error e) -> error e
     -- _ -> error ""
 
+interpretFile :: FilePath -> Seq Cell -> IO (Seq Cell)
+interpretFile name s = do
+  p <- readProgram name
+  return . stack . last . interpret $ PgmState (fromList p) 0 s S.Empty
+
 main :: IO ()
 main = test boundLim 73 (CReal (0.001) <| S.Empty)
 
@@ -235,19 +256,6 @@ test p initpc s = do
   let r = interpret (PgmState p initpc s S.Empty)
   mapM_ (putStrLn . show) r
   putStrLn . show . stack . last $ r
-
-zero :: Seq Op
-zero = fromList
-  [ Rlim 2   -- limit of 2^(-n)
-  , Ret      -- end
-  , Ineg     -- p -> -p
-  , Ipush 1  -- -p 1
-  , Zconv
-  , Rconv
-  , Rot 2 1  -- 1 -p
-  , Rsh      -- 2^-p
-  , Ret      -- return from limit
-  ]
 
 -- lim p => case x < 2^p => -x || x > -2^p => x end
 -- cases equiv:  2^p-x > 0     || 2^p+x > 0

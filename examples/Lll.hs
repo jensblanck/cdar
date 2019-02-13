@@ -249,7 +249,9 @@ interpretFile name s = do
   return . stack . last . interpret $ PgmState (fromList p) 0 s S.Empty
 
 main :: IO ()
-main = test boundLim 73 (CReal (0.001) <| S.Empty)
+main = do
+  r <- interpretFile "examples/bounded.lll" (CReal (0.001) <| S.Empty)
+  putStrLn (show r)
 
 test :: Seq Op -> Int -> Seq Cell -> IO ()
 test p initpc s = do

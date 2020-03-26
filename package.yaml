@@ -55,14 +55,16 @@ benchmarks:
 
 executables:
   lll:
-    main: examples/Lll.hs
+    main: Main.hs
+    source-dirs: examples/lll
     dependencies:
       - cdar
       - mtl
       - parsec
 #    ghc-options: -Wunused-top-bind -Wunused-imports
   logistic:
-    main: examples/Logistic.hs
+    main: Main.hs
+    source-dirs: examples/logistic
     dependencies: cdar
     ghc-options: -Wunused-top-binds
   examples:
@@ -70,4 +72,7 @@ executables:
     dependencies: cdar
     source-dirs: examples
     other-modules: ExamplesRump
-    
+  manifold:
+    main: Main.hs
+    dependencies: cdar
+    source-dirs: manifold

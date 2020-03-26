@@ -1,10 +1,10 @@
 cabal-version: 1.12
 
--- This file has been generated from package.yaml by hpack version 0.31.1.
+-- This file has been generated from package.yaml by hpack version 0.31.2.
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 6ccaf86f9eee638268be7bb7ea7b9cd29f7e8a582af3c0b816ed93ad2c14b8f0
+-- hash: 81e2842a942f88ed554dbb73d64169751f8c688e402000fe3c538e5d2174a89e
 
 name:           cdar
 version:        0.1.0.0
@@ -55,9 +55,11 @@ executable examples
   default-language: Haskell2010
 
 executable lll
-  main-is: examples/Lll.hs
+  main-is: Main.hs
   other-modules:
       Paths_cdar
+  hs-source-dirs:
+      examples/lll
   ghc-options: -Wall -fno-warn-type-defaults -O2
   build-depends:
       base
@@ -70,10 +72,27 @@ executable lll
   default-language: Haskell2010
 
 executable logistic
-  main-is: examples/Logistic.hs
+  main-is: Main.hs
   other-modules:
       Paths_cdar
+  hs-source-dirs:
+      examples/logistic
   ghc-options: -Wall -fno-warn-type-defaults -O2 -Wunused-top-binds
+  build-depends:
+      base
+    , cdar
+    , containers
+    , deepseq
+    , integer-gmp
+  default-language: Haskell2010
+
+executable manifold
+  main-is: Main.hs
+  other-modules:
+      Paths_cdar
+  hs-source-dirs:
+      manifold
+  ghc-options: -Wall -fno-warn-type-defaults -O2
   build-depends:
       base
     , cdar

@@ -1,7 +1,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 module Main where
 
-import Data.CDAR()
+import Data.CDAR
 import Data.Ratio()
 
 data Coord i a = Coord { chart :: i
@@ -12,6 +12,11 @@ data Charts = North | South deriving (Eq, Ord, Read, Show)
 
 type TL = Coord Charts Rational
 type TLCR = Coord Charts CR
+
+toChart :: (Eq i, Fractional a) => i -> Coord i a -> Maybe (Coord i a)
+toChart c t@(Coord k x)
+  | c == k = Just t
+  | otherwise = Just $ Coord c (1/x)
 
 transition :: (Eq i, Fractional a) => i -> i -> Coord i a -> Maybe (Coord i a)
 transition k k' (Coord c x)
@@ -29,7 +34,7 @@ showTL (Coord North 0) = "∞"
 showTL (Coord North x) = show (1/x)
 showTL (Coord South x) = show x
 
-instance (Eq a, Fractional a) => Num (Coord Charts a) where
+instance {-# OVERLAPPABLE #-} (Eq a, Fractional a) => Num (Coord Charts a) where
   (Coord North 0) + (Coord North _) = Coord North 0
   (Coord North _) + (Coord North 0) = Coord North 0
   (Coord North x) + (Coord North y) = Coord North (1/(1/x + 1/y))
@@ -55,6 +60,14 @@ instance (Eq a, Fractional a) => Fractional (Coord Charts a) where
 instance (Eq a, Fractional a, Ord a, Real a) => Real (Coord Charts a) where
   toRational (Coord South x) = toRational x
   toRational (Coord North x) = 1/toRational x
+
+instance {-# OVERLAPPING #-} Num (Coord Charts Approx) where
+  _ + _ = undefined
+  _ * _ = undefined
+  negate (Coord c x) = Coord c (negate x)
+  abs (Coord c x) = Coord c (abs x)
+  signum (Coord c x) = Coord c (signum x)
+  fromInteger n = Coord South (fromInteger n)
 
 main :: IO ()
 main = print "Hej"

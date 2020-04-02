@@ -14,3 +14,9 @@ instance Scalable Integer where
   scale x n
     | n >= 0 = unsafeShiftL x n
     | otherwise = unsafeShiftR (x + bit (-n-1)) (-n)
+
+type Precision = Int
+
+class ApproxOps a where
+  showA :: a -> String
+  showInBaseA :: Int -> a -> String

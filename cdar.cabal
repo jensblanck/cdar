@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 81e2842a942f88ed554dbb73d64169751f8c688e402000fe3c538e5d2174a89e
+-- hash: 7418192f9c7c172bec356a114a78eaf7aca14537f59e8f360ddf97cd0551e546
 
 name:           cdar
 version:        0.1.0.0
@@ -28,6 +28,7 @@ library
       Data.CDAR.Dyadic
       Data.CDAR.IntegerLog
   other-modules:
+      Data.CDAR.PL
       Paths_cdar
   hs-source-dirs:
       src/

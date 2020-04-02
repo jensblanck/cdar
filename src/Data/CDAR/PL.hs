@@ -8,12 +8,14 @@ The computable reals are realised as lists of rapidly shrinking intervals. The i
 
 For more information on the theoretical aspects see <http://cs.swan.ac.uk/~csjens/pdf/centred.pdf>.
 -}
-module Data.CDAR.Approx (Approx(..)
-                        ,CR(..)
+module Data.CDAR.PL (A(..)
+                    ,PL(..)
 --                        ,errorBits
 --                        ,errorBound
 --                        ,defaultPrecision
-                        ,Precision
+                    ,divideOut
+                    ,divideOutFactors
+{-                        ,Precision
                         ,showA
                         ,showInBaseA
                         ,endToApprox
@@ -115,7 +117,9 @@ module Data.CDAR.Approx (Approx(..)
                         ,floorCR
                         ,ceilingCR
                         ,limCR
-                        ,unitError) where
+                        ,unitError
+-}
+                    ) where
 
 import           Control.Applicative (ZipList (..))
 import           Control.DeepSeq
@@ -193,20 +197,23 @@ Note, that we cannot ensure that converging sequences are mapped to converging
 sequences because of properties of computable real arithmetic. In particular,
 at any discuntinuity, it is impossible to compute a converging sequence.
 -}
-data Approx = Approx Integer Integer Int
-            | Bottom
-              deriving (Read,Show)
+data A = A Integer Integer Int
+       | A' Integer Integer Int
+       | ABottom
+       deriving (Read,Show)
 
-instance NFData Approx where
-    rnf Bottom = ()
-    rnf (Approx m e s) = rnf m `seq` rnf e `seq` rnf s
+instance NFData A where
+    rnf ABottom = ()
+    rnf (A m e s) = rnf m `seq` rnf e `seq` rnf s
+    rnf (A' m e s) = rnf m `seq` rnf e `seq` rnf s
 
-instance Scalable Approx where
-  scale Bottom _ = Bottom
-  scale (Approx m e s) n = Approx m e (s+n)
+instance Scalable A where
+  scale ABottom _ = ABottom
+  scale (A m e s) n = A m e (s+n)
+  scale (A' m e s) n = A' m e (s+n)
 
-instance Scalable CR where
-  scale (CR x) n = CR $ flip scale n <$> x
+--instance Scalable CR where
+--  scale (CR x) n = CR $ flip scale n <$> x
 
 {-|
 =The Computable Real data type
@@ -229,7 +236,7 @@ computable real will converge.
 For the /n/-th element in the sequence there is a bound on how much effort is
 put into the computation of the approximation. For involved computations it is
 possible that several of the leading approximations are trivial, i.e.,
-'Bottom'. If the computation will eventually converge, it will generate proper
+'ABottom'. If the computation will eventually converge, it will generate proper
 approximation after a modest number of initial trivial approximations.
 
 The amount of added effort in each iteration is rather substantial so the
@@ -242,7 +249,8 @@ implementation of infinite sequences of approximations, as that allows for
 applicative style. Hopefully, it is not needed to access the internal
 representation of 'CR' directly.
 -}
-newtype CR = CR {unCR :: ZipList Approx}
+newtype PL = PL {unPL :: ZipList A}
+
 
 -- |Number of bits that error term is allowed to take up. A larger size allows
 -- for more precise but slightly more costly computations. The value here is
@@ -275,8 +283,7 @@ be after the decimal point) means that the last position may be off by 1,
 i.e., it could be down to 0 or up to 2. And [0,2] is indeed the range encoded
 by the above approximation.
 -}
-instance ApproxOps Approx where
-  --showA :: Approx -> String
+instance ApproxOps A where
   showA = showInBaseA 10
 
 -- |Similar to 'showA' but can generate representations in other bases (<= 16).
@@ -288,9 +295,9 @@ instance ApproxOps Approx where
    e' is the error term shifted appropriately when s positive, also set to at least 1
      (otherwise odd bases will yield infinite expansions)
 -}
-  --showInBaseA :: Int -> Approx -> String
-  showInBaseA _ Bottom = "⊥"
-  showInBaseA base (Approx m e s)
+  --showInBaseA :: Int -> A -> String
+  showInBaseA _ ABottom = "⊥"
+  showInBaseA base (A m e s)
     | e == 0 && (even base || s >= 0)
                      = sign ++ showExactA base b i f
     | am < e         = "±" ++ showNearZeroA base b i' f'
@@ -303,6 +310,29 @@ instance ApproxOps Approx where
           i' = shift (am+e) s
           f' = (am+e) .&. (b-1)
           sign = if m < 0 then "-" else ""
+  showInBaseA base (A' m e s)
+    | e == 0 && (even base || s >= 0)
+                     = sign ++ showExactA base b i f
+    | am < e         = "±" ++ showNearZeroA base b i' f'
+    | otherwise      = sign ++ showInexactA base b i f e'
+    where b = bit (max 0 (-s))
+          am = abs m
+          i = shift am s
+          e' = max 1 $ shift e (max 0 s)
+          f = am .&. (b-1)
+          i' = shift (am+e) s
+          f' = (am+e) .&. (b-1)
+          sign = if m < 0 then "-" else ""
+
+divideOut :: Integer -> Integer -> Integer
+divideOut p m =
+  let (q,r) =  m `divMod` p
+  in if r == 0 then divideOut p q else m
+
+divideOutFactors :: Int -> Integer -> Integer
+divideOutFactors b m =
+  let g f n = if fromIntegral b `mod` f == 0 then divideOut f n else n
+  in g 13 . g 11 . g 7 . g 5 . g 3 . g 2 $ m
 
 showExactA :: Int -> Integer -> Integer -> Integer -> String
 showExactA base b i f = 
@@ -357,10 +387,11 @@ showInexactA base b i f e =
               then ""
               else "." ++ frac ++ "~"
 
+{-
 -- |Construct a centred approximation from the end-points.
 endToApprox :: Extended Dyadic -> Extended Dyadic -> Approx
 endToApprox (Finite l) (Finite u)
-  | u < l = Bottom -- Might be better with a signalling error.
+  | u < l = ABottom -- Might be better with a signalling error.
   | otherwise =
     let a@(m:^s) = scale (l + u) (-1)
         (n:^t)   = u-a
@@ -368,27 +399,27 @@ endToApprox (Finite l) (Finite u)
         m'       = unsafeShiftL m (s-r)
         n'       = unsafeShiftL n (t-r)
     in (Approx m' n' r)
-endToApprox _ _ = Bottom
+endToApprox _ _ = ABottom
 
 -- Interval operations
 -- |Gives the lower bound of an approximation as an 'Extended' 'Dyadic' number.
 lowerBound :: Approx -> Extended Dyadic
 lowerBound (Approx m e s) = Finite ((m-e):^s)
-lowerBound Bottom = NegInf
+lowerBound ABottom = NegInf
 
 -- |Gives the upper bound of an approximation as an 'Extended' 'Dyadic' number.
 upperBound :: Approx -> Extended Dyadic
 upperBound (Approx m e s) = Finite ((m+e):^s)
-upperBound Bottom = PosInf
+upperBound ABottom = PosInf
 
 -- |Gives the lower bound of an 'Approx' as an exact 'Approx'.
 lowerA :: Approx -> Approx
-lowerA Bottom = Bottom
+lowerA ABottom = ABottom
 lowerA (Approx m e s) = Approx (m-e) 0 s
 
 -- |Gives the upper bound of an 'Approx' as an exact 'Approx'.
 upperA :: Approx -> Approx
-upperA Bottom = Bottom
+upperA ABottom = ABottom
 upperA (Approx m e s) = Approx (m+e) 0 s
 
 -- |Gives the mid-point of an approximation as a 'Maybe' 'Dyadic' number.
@@ -398,7 +429,7 @@ centre _ = Nothing
 
 -- |Gives the centre of an 'Approx' as an exact 'Approx'.
 centreA :: Approx -> Approx
-centreA Bottom = Bottom
+centreA ABottom = ABottom
 centreA (Approx m _ s) = Approx m 0 s
 
 -- |Gives the radius of an approximation as a 'Dyadic' number. Currently a
@@ -420,7 +451,7 @@ exact _ = False
 -- |Checks if a number is approximated by an approximation, i.e., if it
 -- belongs to the interval encoded by the approximation.
 approximatedBy :: Real a => a -> Approx -> Bool
-_ `approximatedBy` Bottom = True
+_ `approximatedBy` ABottom = True
 r `approximatedBy` d =
     let r' = toRational r
     in toRational (lowerBound d) <= r' && r' <= toRational (upperBound d)
@@ -442,7 +473,7 @@ instance Eq Approx where
                    in unsafeShiftL m k == n && unsafeShiftL e k == f
         | s <  t = let k = t-s
                    in m == unsafeShiftL n k && e == unsafeShiftL f k
-    Bottom == Bottom = True
+    ABottom == ABottom = True
     _ == _ = False
 
 -- |Not a sensible instance. Just used to allow to allow enumerating integers
@@ -450,7 +481,7 @@ instance Eq Approx where
 instance Enum Approx where
     toEnum n = Approx (fromIntegral n) 0 0
     fromEnum (Approx m _ s) = fromIntegral $ shift m s
-    fromEnum Bottom = 0
+    fromEnum ABottom = 0
 
 instance Num Approx where
     (Approx m e s) + (Approx n f t)
@@ -458,7 +489,7 @@ instance Num Approx where
                    in Approx (unsafeShiftL m k + n) (unsafeShiftL e k + f) t
         | s <  t = let k = t-s
                    in Approx (m + unsafeShiftL n k) (e + unsafeShiftL f k) s
-    _ + _ = Bottom
+    _ + _ = ABottom
     (Approx m e s) * (Approx n f t)
         | am >= e && an >= f && a > 0           = Approx (a+d) (ab+ac) u
         | am >= e && an >= f && a < 0           = Approx (a-d) (ab+ac) u
@@ -480,21 +511,21 @@ instance Num Approx where
             ab = (abs b)
             ac = (abs c)
             u = s+t
-    _ * _ = Bottom
+    _ * _ = ABottom
     negate (Approx m e s) = Approx (-m) e s
-    negate Bottom = Bottom
+    negate ABottom = ABottom
     abs (Approx m e s)
         | m' < e    = let e' = m'+e
                       in Approx e' e' (s-1)
         | otherwise = Approx m' e s
       where m' = abs m
-    abs Bottom = Bottom
+    abs ABottom = ABottom
     signum (Approx m e _)
         | e == 0 = Approx (signum m) 0 0
         | abs m < e = Approx 0 1 0
         | abs m == e = Approx (signum m) 1 (-1)
         | otherwise = Approx (signum m) 0 0
-    signum Bottom = Approx 0 1 0
+    signum ABottom = Approx 0 1 0
     fromInteger i = Approx i 0 0
 
 -- |Convert a rational number into an approximation of that number with
@@ -512,7 +543,7 @@ instance Fractional Approx where
 -- Otherwise, a good approximation with essentially the same significance as
 -- the input will be computed.
 recipA :: Precision -> Approx -> Approx
-recipA _ Bottom = Bottom
+recipA _ ABottom = ABottom
 recipA t (Approx m e s)
     | e == 0      = let s' = integerLog2 (abs m)
                     in Approx
@@ -532,11 +563,11 @@ recipA t (Approx m e s)
     --                        (round (unsafeShiftL m s'%(d)))
     --                        (ceiling (1%2 + unsafeShiftL e s'%(d)))
     --                        (-s-s')
-    | otherwise   = Bottom
+    | otherwise   = ABottom
 
 -- |Divide an approximation by an integer.
 divAInteger :: Approx -> Integer -> Approx
-divAInteger Bottom _ = Bottom
+divAInteger ABottom _ = ABottom
 divAInteger (Approx m e s) n =
   let t = integerLog2 n
   in Approx (round (unsafeShiftL m t % n))
@@ -550,10 +581,10 @@ modA (Approx m e s) (Approx n f t) =
         (d,m') = divMod (unsafeShiftL m (s-r)) (unsafeShiftL n (t-r))
         e' = scale e (s-r) + abs d * scale f (t-r)
     in Approx m' e' r
-modA _ _ = Bottom
+modA _ _ = ABottom
 
 -- |Compute the integer quotient (although returned as an 'Approx' since it
--- may be necessary to return 'Bottom' if the integer quotient can't be
+-- may be necessary to return 'ABottom' if the integer quotient can't be
 -- determined) and the modulus as an approximation of two approximations.
 divModA :: Approx -> Approx -> (Approx, Approx)
 divModA (Approx m e s) (Approx n f t) =
@@ -561,7 +592,7 @@ divModA (Approx m e s) (Approx n f t) =
         (d,m') = divMod (unsafeShiftL m (s-r)) (unsafeShiftL n (t-r))
         e' = e + abs d * f
     in (fromIntegral d, Approx m' e' r)
-divModA _ _ = (Bottom, Bottom)
+divModA _ _ = (ABottom, ABottom)
 
 -- | Compare 'Approx' with a partial result.
 compareA :: Approx -> Approx -> Maybe Ordering
@@ -575,7 +606,7 @@ instance Ord Approx where
   compare x y = maybe (error "compare: comparisons are partial on Approx") id $ compareA x y
 
 -- |The 'toRational' function is partial since there is no good rational
--- number to return for the trivial approximation 'Bottom'.
+-- number to return for the trivial approximation 'ABottom'.
 --
 -- Note that converting to a rational number will give only a single rational
 -- point. Do not expect to be able to recover the interval from this value.
@@ -595,7 +626,7 @@ toDoubleA = fmap (fromRational . toRational) . centre
 precision :: Approx -> Extended Precision
 precision (Approx _ 0 _) = PosInf
 precision (Approx _ e s) = Finite $ - s - (integerLog2 e) - 1
-precision Bottom         = NegInf
+precision ABottom         = NegInf
 
 -- |Computes the significance of an approximation. This is roughly the number
 -- of significant bits.
@@ -605,7 +636,7 @@ significance (Approx 0 _ _) = NegInf
 significance (Approx m 1 _) =  Finite $ integerLog2 (abs m) - 1
 significance (Approx m e _) =
     Finite $ (integerLog2 (abs m)) - (integerLog2 (e-1)) - 1
-significance Bottom         = NegInf
+significance ABottom         = NegInf
 
 {-|
 This function bounds the error term of an 'Approx'.
@@ -630,7 +661,7 @@ desirable to be as close to the identity as possible.
 This function will map a converging sequence to a converging sequence.
 -}
 boundErrorTerm :: Approx -> Approx
-boundErrorTerm Bottom = Bottom
+boundErrorTerm ABottom = ABottom
 boundErrorTerm a@(Approx m e s)
     | e < errorBound = a
     | otherwise =
@@ -667,7 +698,7 @@ increasing precision for a converging sequence, then this will give a
 converging sequence.
 -}
 limitSize :: Precision -> Approx -> Approx
-limitSize _ Bottom = Bottom
+limitSize _ ABottom = ABottom
 limitSize l a@(Approx m e s)
     | k > 0     = Approx
                   ((if testBit m (k-1) then (+1) else id) (unsafeShiftR m k))
@@ -692,22 +723,22 @@ limitAndBound limit =
 
 -- | Find the hull of two approximations.
 unionA :: Approx -> Approx -> Approx
-unionA Bottom _ = Bottom
-unionA _ Bottom = Bottom
+unionA ABottom _ = ABottom
+unionA _ ABottom = ABottom
 unionA a b = endToApprox (lowerBound a `min` lowerBound b) (upperBound a `max` upperBound b)
 
 -- | Find the intersection of two approximations.
 intersectionA :: Approx -> Approx -> Approx
-intersectionA Bottom a = a
-intersectionA a Bottom = a
+intersectionA ABottom a = a
+intersectionA a ABottom = a
 intersectionA a b = if l <= u then endToApprox l u else error "Trying to take intersection of two non-overlapping Approx."
   where l = (lowerBound a `max` lowerBound b)
         u = (upperBound a `min` upperBound b)
 
 -- | Determine if two approximations overlap.
 consistentA :: Approx -> Approx -> Bool
-consistentA Bottom _ = True
-consistentA _ Bottom = True
+consistentA ABottom _ = True
+consistentA _ ABottom = True
 consistentA a b = (lowerBound a `max` lowerBound b) <= (upperBound a `min` upperBound b)
 
 -- |Given a list of polynom coefficients and a value this evaluates the
@@ -717,11 +748,11 @@ consistentA a b = (lowerBound a `max` lowerBound b) <= (upperBound a `min` upper
 -- problem.
 poly :: [Approx] -> Approx -> Approx
 poly [] _ = 0
-poly _ Bottom = Bottom
+poly _ ABottom = ABottom
 poly as x =
     let --poly' :: [Dyadic] -> Dyadic -> Dyadic
         poly' as' x' = sum . zipWith (*) as' $ pow x'
-        ms = map ((maybe (error "Can't compute poly with Bottom coefficients") id) . centre) as
+        ms = map ((maybe (error "Can't compute poly with ABottom coefficients") id) . centre) as
         (Just c) = centre x
         (m':^s) = poly' ms c
         ds = zipWith (*) (tail as) (map fromIntegral ([1,2..] :: [Int]))
@@ -754,7 +785,7 @@ powers (Approx m e s) =
         sumAlt (x:y:xs) = let (a,b) = sumAlt xs in (a+x,b+y)
         g s' (m', e') = Approx m' e' s'
     in zipWith g (iterate (+s) 0) $ map (sumAlt . f) binomialCoefficients
-powers _ = repeat Bottom
+powers _ = repeat ABottom
 
 {-|
 Old implementation of sqrt using Heron's method. Using the current method
@@ -762,10 +793,10 @@ below proved to be more than twice as fast for small arguments (~50 bits) and
 many times faster for larger arguments.
 -}
 sqrtHeronA :: Precision -> Approx -> Approx
-sqrtHeronA _ Bottom = Bottom
+sqrtHeronA _ ABottom = ABottom
 sqrtHeronA k a@(Approx m e s)
     | -m > e    = error "Attempting sqrt of Approx containing only negative numbers."
-    | m < e     = Bottom
+    | m < e     = ABottom
     | e == 0    = let (n:^t) = shiftD (-k) $ sqrtD (-k-2) (m:^s)
                   in Approx n 1 t
     | m == e    = let (n:^t) = sqrtD (s `quot` 2 -errorBits) ((m+e):^s)
@@ -795,10 +826,10 @@ sqrtA k x = limitAndBound k $ x * sqrtRecA k x
 This uses Newton's method for computing the reciprocal of the square root.
 -}
 sqrtRecA :: Precision -> Approx -> Approx
-sqrtRecA _ Bottom = Bottom
+sqrtRecA _ ABottom = ABottom
 sqrtRecA k a@(Approx m e s)
   | -m > e    = error "Attempting sqrtRec of Approx containing only negative numbers."
-  | m < e     = Bottom
+  | m < e     = ABottom
   | e == 0    = let (n:^t) = shiftD (-k) $ sqrtRecD (-k-2) (m:^s)
                 in Approx n 1 t
   | m == e    = let (n:^t) = sqrtRecD (s `quot` 2 -errorBits) ((m+e):^s)
@@ -851,7 +882,7 @@ findStartingValues f = map (fromRational . toRational . (/2)) . (\l -> zipWith (
 -- multiplicating a number with itself which will give a slightly larger
 -- interval due to the dependency problem.
 sqrA :: Approx -> Approx
-sqrA Bottom = Bottom
+sqrA ABottom = ABottom
 sqrA (Approx m e s)
   | am > e = Approx (m^(2 :: Int) + e^(2 :: Int)) (2*abs m*e) (2*s)
   | otherwise = let m' = (am + e)^(2 :: Int) in Approx m' m' (2*s-1)
@@ -941,7 +972,7 @@ evenFac = let f (x:_:xs) = x:f xs
 
 -- | Checks if the centre of an approximation is not 0.
 nonZeroCentredA :: Approx -> Bool
-nonZeroCentredA Bottom = False
+nonZeroCentredA ABottom = False
 nonZeroCentredA (Approx 0 _ _) = False
 nonZeroCentredA _ = True
 
@@ -974,7 +1005,7 @@ expA = expTaylorA'
 
 -- | Exponential by binary splitting summation of Taylor series.
 expBinarySplittingA :: Precision -> Approx -> Approx
-expBinarySplittingA _ Bottom = Bottom
+expBinarySplittingA _ ABottom = ABottom
 expBinarySplittingA res a@(Approx m e s) =
   let s' = s + integerLog2 m
       -- r' chosen so that a' below is smaller than 1/2
@@ -996,7 +1027,7 @@ expBinarySplittingA res a@(Approx m e s) =
 
 -- | Exponential by summation of Taylor series.
 expTaylorA :: Precision -> Approx -> Approx
-expTaylorA _ Bottom = Bottom
+expTaylorA _ ABottom = ABottom
 expTaylorA res (Approx m e s) =
   let s' = s + integerLog2 m
       -- r' chosen so that a' below is smaller than 1/2
@@ -1012,7 +1043,7 @@ expTaylorA res (Approx m e s) =
    
 -- | Exponential by summation of Taylor series.
 expTaylorA' :: Precision -> Approx -> Approx
-expTaylorA' _ Bottom = Bottom
+expTaylorA' _ ABottom = ABottom
 expTaylorA' res (Approx m e s) =
   let s' = s + integerLog2 m
       -- r' chosen so that a' below is smaller than 1/2
@@ -1043,16 +1074,16 @@ logA :: Precision -> Approx -> Approx
 -- less than 3/2 on the interval, so it easy to just compute one expensive
 -- computation. We could even make use of the fact that the derivative on the
 -- interval x is bounded by 1/x to get a tighter bound on the error.
-logA _ Bottom = Bottom
+logA _ ABottom = ABottom
 logA p x@(Approx m e _)
   | m > e = logInternal p x
 --    let (n :^ t) = logD (negate p) $ (m-e) :^ s
 --        (n' :^ t') = logD (negate p) $ (m+e) :^ s
 --    in endToApprox (Finite ((n-1):^t)) (Finite ((n'+1):^t'))
-  | otherwise = Bottom
+  | otherwise = ABottom
 
 logInternal :: Int -> Approx -> Approx
-logInternal _ Bottom = error "LogInternal: impossible"
+logInternal _ ABottom = error "LogInternal: impossible"
 logInternal p (Approx m e s) =
   let t' = (negate p) - 10 - max 0 (integerLog2 m + s) -- (5 + size of argument) guard digits
       r = s + integerLog2 (3*m) - 1
@@ -1065,9 +1096,9 @@ logInternal p (Approx m e s) =
 
 -- | Logarithm by binary splitting summation of Taylor series.
 logBinarySplittingA :: Precision -> Approx -> Approx
-logBinarySplittingA _ Bottom = Bottom
+logBinarySplittingA _ ABottom = ABottom
 logBinarySplittingA res a@(Approx m e s) =
-    if m <= e then Bottom -- only defined for strictly positive arguments
+    if m <= e then ABottom -- only defined for strictly positive arguments
     else
         let r = s + integerLog2 (3*m) - 1
             a' = Approx m e (s-r)  -- a' is a scaled by a power of 2 so that 2/3 <= |a'| <= 4/3
@@ -1088,9 +1119,9 @@ logBinarySplittingA res a@(Approx m e s) =
 
 -- | Logarithm by summation of Taylor series.
 logTaylorA :: Precision -> Approx -> Approx
-logTaylorA _ Bottom = Bottom
+logTaylorA _ ABottom = ABottom
 logTaylorA res (Approx m e s) =
-    if m <= e then Bottom -- only defined for strictly positive arguments
+    if m <= e then ABottom -- only defined for strictly positive arguments
     else
         let res' = res + errorBits
             r = s + integerLog2 (3*m) - 1
@@ -1121,7 +1152,7 @@ sinTaylorRed1A res a =
   
 -- | Second level of range reduction for sine.
 sinTaylorRed2A :: Precision -> Approx -> Approx
-sinTaylorRed2A _ Bottom = Bottom
+sinTaylorRed2A _ ABottom = ABottom
 sinTaylorRed2A res a@(Approx m _ s) = 
   let k = max 0 (integerLog2 m + s + (floor . sqrt $ fromIntegral res))
       a' = a * recipA res (3^k)
@@ -1142,7 +1173,7 @@ cosA res x = sinA res ((Approx 1 0 (-1)) * piA res - x)
 --
 -- Begins by reducing the interval to [0,π/4].
 sinBinarySplittingA :: Precision -> Approx -> Approx
-sinBinarySplittingA _ Bottom = Bottom
+sinBinarySplittingA _ ABottom = ABottom
 sinBinarySplittingA res a =
     let _pi = piBorweinA res
         (Approx m' e' s') = 4 * a * recipA res _pi
@@ -1163,7 +1194,7 @@ sinBinarySplittingA res a =
 --
 -- Begins by reducing the interval to [0,π/4].
 cosBinarySplittingA :: Precision -> Approx -> Approx
-cosBinarySplittingA _ Bottom = Bottom
+cosBinarySplittingA _ ABottom = ABottom
 cosBinarySplittingA res a =
     let _pi = piBorweinA res
         (Approx m' e' s') = 4 * a * recipA res _pi
@@ -1186,7 +1217,7 @@ atanA = atanTaylorA
 
 -- | Computes the arc tangent of an approximation by binary splitting summation of Taylor series.
 atanBinarySplittingA :: Precision -> Approx -> Approx
-atanBinarySplittingA _ Bottom = Bottom
+atanBinarySplittingA _ ABottom = ABottom
 atanBinarySplittingA res a =
   let rr x = x * recipA res (1 + sqrtA res (1 + sqrA x))
       a' = rr . rr . rr $ a -- range reduction so that |a'| < 1/4
@@ -1205,7 +1236,7 @@ atanBinarySplittingA res a =
       nextTerm = Approx 1 0 (-2*n)
   in boundErrorTerm . (8*) $ fudge (t * recipA res (fromIntegral b*q)) nextTerm
 
--- + Bottom
+-- + ABottom
 -- + Deal with sign -- Because of next line, not worthwhile
 -- + if lowerbound(abs a) > 2 then pi/2 - atan (1/a) -- Don't want to do this, what if 0 \in a?
 -- + else
@@ -1218,7 +1249,7 @@ atanBinarySplittingA res a =
 --   - (2^k *)
 
 atanTaylorA :: Precision -> Approx -> Approx
-atanTaylorA _ Bottom = Bottom
+atanTaylorA _ ABottom = ABottom
 atanTaylorA res a =
   let (Finite r) = min (pure res) (significance a)
       k = min (floor (sqrt (fromIntegral r)) `div` 2) 2
@@ -1244,7 +1275,7 @@ atanTaylorA res a =
 
 -- | Computes the arc tangent of an approximation by summation of Taylor series.
 -- atanTaylorA :: Precision -> Approx -> Approx
--- atanTaylorA _ Bottom = Bottom
+-- atanTaylorA _ ABottom = ABottom
 -- atanTaylorA res a =
 --   let rr x = x * recipA res (1 + sqrtA res (1 + sqrA x))
 --       a' = rr . rr . rr $ a -- range reduction so that |a'| < 1/4
@@ -1263,7 +1294,7 @@ swapSinCos res a = sqrtA res $ 1 - sqrA a
 
 -- Computes sine if second argument is in the range [0,pi/4]
 sinInRangeA :: Precision -> Approx -> Approx
-sinInRangeA _ Bottom = Bottom
+sinInRangeA _ ABottom = ABottom
 sinInRangeA res a =
     let n = res `div` 2        -- need to improve this estimate (is valid from res>=80)
         (_, q, b, t) = abpq ones
@@ -1277,7 +1308,7 @@ sinInRangeA res a =
 
 -- Computes cosine if second argument is in the range [0,pi/4]
 cosInRangeA :: Precision -> Approx -> Approx
-cosInRangeA _ Bottom = Bottom
+cosInRangeA _ ABottom = ABottom
 cosInRangeA res a =
     let n = res `div` 2        -- need to improve this estimate (is valid from res>=80)
         (_, q, b, t) = abpq ones
@@ -1324,7 +1355,7 @@ fudge (Approx m 0 s) (Approx m' e' s') =
 fudge (Approx m e s) (Approx m' e' s') =
   let m'' = 1 + (abs m' + e') `shift` (s' - s + 1)
   in Approx m (e+m'') s
-fudge _ _  = Bottom
+fudge _ _  = ABottom
 
 --
 
@@ -1425,7 +1456,7 @@ lnLarge t x =
     in Approx m e (s-n)
 
 lnSmall :: Precision -> Approx -> Approx
-lnSmall _ Bottom = Bottom
+lnSmall _ ABottom = ABottom
 lnSmall t x@(Approx m _ s) =
     let (Finite t') = min (significance x) (Finite (-t))
         _pi = piBorweinA t'
@@ -1440,8 +1471,8 @@ lnSmall t x@(Approx m _ s) =
 -- the AGM'.
 logAgmA :: Precision -> Approx -> Approx
 logAgmA t x
-    | significance x < pure 5     = Bottom
-    | 0 `approximatedBy` x        = Bottom
+    | significance x < pure 5     = ABottom
+    | 0 `approximatedBy` x        = ABottom
     | signum x == (-1)            = error "Trying to take logarithm of purely negative Approx."
     | lowerBound x > pure 2       = lnLarge t x
     | upperBound x < pure 3       = lnSmall t x
@@ -1552,12 +1583,12 @@ instance Read CR where
 -- used to bail out of computations where the size of approximation grow
 -- quickly.
 ok :: Int -> Approx -> Approx
-ok d a = if precision a > fromIntegral d then a else Bottom
+ok d a = if precision a > fromIntegral d then a else ABottom
 
 -- | Given a 'CR' this functions finds an approximation of that number to
 -- within the precision required.
 require :: Int -> CR -> Approx
-require d (CR x) = head . dropWhile (== Bottom) . getZipList $ ok d <$> x
+require d (CR x) = head . dropWhile (== ABottom) . getZipList $ ok d <$> x
 
 -- | Gives a 'Double' approximation of a 'CR' number.
 toDouble :: CR -> Maybe Double
@@ -1570,7 +1601,7 @@ fromDouble x =
   -- instead of as a fraction in the IEEE 754 encoding the exponent 972
   -- corresponds to 1024, which is what IEEE 754 use to encode infinity and
   -- NaN.
-  in if (s == 972) then CR $ pure Bottom
+  in if (s == 972) then CR $ pure ABottom
      else CR $ pure (Approx m 1 s)
 
 fromDoubleAsExactValue :: Double -> CR
@@ -1580,7 +1611,7 @@ fromDoubleAsExactValue x =
   -- instead of as a fraction in the IEEE 754 encoding the exponent 972
   -- corresponds to 1024, which is what IEEE 754 use to encode infinity and
   -- NaN.
-  in if (s == 972) then CR $ pure Bottom
+  in if (s == 972) then CR $ pure ABottom
      else CR $ pure (Approx m 0 s)
 
 transposeZipList :: [ZipList a] -> ZipList [a]
@@ -1655,7 +1686,7 @@ sinRangeReduction2 :: CR -> CR
 sinRangeReduction2 (CR x) =
   let k = (\a -> case a of 
                    (Approx m _ s) -> max 0 $ 8 * (integerLog2 m + s + 3) `div` 5
-                   Bottom -> 0) <$> x
+                   ABottom -> 0) <$> x
       (CR y) = sinCRTaylor ((CR x) / (CR $ fromIntegral . (3^) <$> k))
       step z = z*(3-4*z^2)
   in CR $ (\y' k' l -> limitAndBound l $ foldr ($) y' (replicate k' step)) <$> y <*> k <*> resources
@@ -1722,12 +1753,12 @@ approximations.
 -- statement to return zi. Note that this is non-monotonic since better
 -- approximations may make xj > yj for some j < i.
 caseA :: [[Approx]] -> Approx
-caseA [] = Bottom
+caseA [] = ABottom
 caseA ((x:y:z:_) : as) =
   if compareA x y == Just GT
   then z
   else caseA as
-caseA (_:_) = Bottom
+caseA (_:_) = ABottom
 
 -- | The arguments to 'caseCR' should be a list of lists. The second level of
 -- lists should have 3 elements each, i.e., argument should have the form
@@ -1764,7 +1795,7 @@ selectCR as = head . dropWhile (== Unknown) . getZipList $ selectA <$> transpose
 
 -- | The floor of an 'Approx'.
 floorA :: Approx -> Approx
-floorA Bottom = Bottom
+floorA ABottom = ABottom
 floorA (Approx m e s) =
   let k = max (-s) 0
       l = Finite . fromInteger $ (m-e) `div` (scale 1 k)
@@ -1773,7 +1804,7 @@ floorA (Approx m e s) =
 
 -- | The ceiling of an 'Approx'.
 ceilingA :: Approx -> Approx
-ceilingA Bottom = Bottom
+ceilingA ABottom = ABottom
 ceilingA (Approx m e s) =
   let k = max (-s) 0
       l = Finite . fromInteger . (+1) $ (m-e-1) `div` (scale 1 k)
@@ -1800,3 +1831,4 @@ limCR f = CR . ZipList $ [let p = getZipList resources !! n
 
 unitError :: CR
 unitError = CR . pure $ Approx 0 1 0
+-}

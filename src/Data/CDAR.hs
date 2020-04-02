@@ -14,10 +14,12 @@ module Data.CDAR (module Approx
                  ,module Classes
                  ,module Dyadic
                  ,module Extended
-                 ,module IntegerLog) where
+                 ,module IntegerLog
+                 ,module PL) where
 
 import           Data.CDAR.Approx as Approx
 import           Data.CDAR.Classes as Classes
 import           Data.CDAR.Dyadic as Dyadic
 import           Data.CDAR.Extended as Extended
 import           Data.CDAR.IntegerLog as IntegerLog
+import           Data.CDAR.PL as PL

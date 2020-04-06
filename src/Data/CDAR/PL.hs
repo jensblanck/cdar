@@ -13,8 +13,8 @@ module Data.CDAR.PL (A(..)
 --                        ,errorBits
 --                        ,errorBound
 --                        ,defaultPrecision
-                    ,divideOut
-                    ,divideOutFactors
+                    ,baseExpansion
+                    ,showInexactA'
 {-                        ,Precision
                         ,showA
                         ,showInBaseA
@@ -310,19 +310,17 @@ instance ApproxOps A where
           i' = shift (am+e) s
           f' = (am+e) .&. (b-1)
           sign = if m < 0 then "-" else ""
+  showInBaseA _ (A' 0 0 _) = "∞"
   showInBaseA base (A' m e s)
-    | e == 0 && (even base || s >= 0)
-                     = sign ++ showExactA base b i f
-    | am < e         = "±" ++ showNearZeroA base b i' f'
-    | otherwise      = sign ++ showInexactA base b i f e'
-    where b = bit (max 0 (-s))
-          am = abs m
-          i = shift am s
-          e' = max 1 $ shift e (max 0 s)
-          f = am .&. (b-1)
-          i' = shift (am+e) s
-          f' = (am+e) .&. (b-1)
+    | exactA'   = sign ++ showExactA' base i n' d
+    | am < e    = "|·|>" ++ showNearInfinityA' base (d+e) n
+    | otherwise = sign ++ showInexactA' base d n e
+    where am = abs m
+          d = scale am (max s 0)
+          n = bit (max 0 (-s))
+          (i,n') = divMod n d
           sign = if m < 0 then "-" else ""
+          exactA' = e == 0 && divideOutFactors base d == 1
 
 divideOut :: Integer -> Integer -> Integer
 divideOut p m =
@@ -330,12 +328,12 @@ divideOut p m =
   in if r == 0 then divideOut p q else m
 
 divideOutFactors :: Int -> Integer -> Integer
-divideOutFactors b m =
-  let g f n = if fromIntegral b `mod` f == 0 then divideOut f n else n
-  in g 13 . g 11 . g 7 . g 5 . g 3 . g 2 $ m
+divideOutFactors base d =
+  let g p _n = if fromIntegral base `mod` p == 0 then divideOut p _n else _n
+  in g 13 . g 11 . g 7 . g 5 . g 3 . g 2 $ d
 
 showExactA :: Int -> Integer -> Integer -> Integer -> String
-showExactA base b i f = 
+showExactA base b i f =
     let g i' = let (q,r) = quotRem i' (fromIntegral base)
                in if i' == 0 then Nothing
                   else Just (intToDigit (fromIntegral r), q)
@@ -348,6 +346,20 @@ showExactA base b i f =
        ++ (if null fp then "" else ".")
        ++ fp
 
+showExactA' :: Int -> Integer -> Integer -> Integer -> String
+showExactA' base i n d = 
+    let g i' = let (q,r) = quotRem i' (fromIntegral base)
+               in if i' == 0 then Nothing
+                  else Just (intToDigit (fromIntegral r), q)
+        ip = reverse (unfoldr g i)
+        h (n', d') = let (q,r) = quotRem ((fromIntegral base)*n') d'
+                     in if n' == 0 then Nothing
+                        else Just (intToDigit (fromIntegral q), (r, d'))
+        fp = unfoldr h (n,d)
+    in (if null ip then "0" else ip)
+       ++ (if null fp then "" else ".")
+       ++ fp
+
 showNearZeroA :: Int -> Integer -> Integer -> Integer -> String
 showNearZeroA base b i f =
     let s = showExactA base b i f
@@ -356,6 +368,13 @@ showNearZeroA base b i f =
     in if null t
        then replicate (length u) '~'
        else t ++ "~"
+
+showNearInfinityA' :: Int -> Integer -> Integer -> String
+showNearInfinityA' base d n =
+    let (i,n') = divMod n d
+    in if divideOutFactors base d == 1
+       then showExactA' base i n' d
+       else "Inexact"
 
 showInexactA :: Int -> Integer -> Integer -> Integer -> Integer -> String
 showInexactA base b i f e =
@@ -386,6 +405,35 @@ showInexactA base b i f e =
     in int ++ if noFrac
               then ""
               else "." ++ frac ++ "~"
+
+baseExpansion :: Int -> Integer -> Integer -> String
+baseExpansion base d n1 =
+  let (i,n) = divMod n1 d
+      g i' = let (q,r) = quotRem i' (fromIntegral base)
+             in if i' == 0 then Nothing
+                else Just (intToDigit (fromIntegral r), q)
+      ip = reverse (unfoldr g i)
+      h (n', d') = let (q,r) = quotRem ((fromIntegral base)*n') d'
+                   in if n' == 0 then Nothing
+                      else Just (intToDigit (fromIntegral q), (r, d'))
+      fp = unfoldr h (n,d)
+  in (if null ip then "0" else ip)
+     ++ (if null fp then "" else ".")
+     ++ fp
+
+showInexactA' :: Int -> Integer -> Integer -> Integer -> String
+showInexactA' base d n e =
+  let a = baseExpansion base (d-e) n
+      b = baseExpansion base (d+e) n
+      a' = takeWhile (/= '.') a
+      b' = takeWhile (/= '.') b
+      la = length a'
+      lb = length b'
+      z = zip a b
+      z' = takeWhile (\(x,y) -> x == y) z
+      lz = length z'
+  in if la /= lb then replicate (max la lb) '~'
+     else take lz a ++ replicate (max 1 (la-lz)) '~'
 
 {-
 -- |Construct a centred approximation from the end-points.

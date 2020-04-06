@@ -244,20 +244,6 @@ representation of 'CR' directly.
 -}
 newtype CR = CR {unCR :: ZipList Approx}
 
--- |Number of bits that error term is allowed to take up. A larger size allows
--- for more precise but slightly more costly computations. The value here is
--- suggested by test runs.
-errorBits :: Int
-errorBits = 10
-
-errorBound :: Integer
-errorBound = 2^errorBits
-
--- |The default cutoff for diverging computations. May well be chosen much
--- smaller. 31 corresponds to about 10 decimal places.
-defaultPrecision :: Precision
-defaultPrecision = 31
-
 {-|
 
 Gives a decimal representation of an approximation. It tries to give as many

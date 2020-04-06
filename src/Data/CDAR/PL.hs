@@ -391,6 +391,50 @@ showInexactA base b i f e =
               then ""
               else "." ++ frac ++ "~"
 
+instance IntervalOps A where
+  -- |Gives the lower bound of an 'A' as an exact 'A'.
+  lowerA ABottom = ABottom
+  lowerA (A m e s) = A (m-e) 0 s
+  lowerA (A' m e s) = A' (m+e) 0 s
+  -- |Gives the upper bound of an 'A' as an exact 'A'.
+  upperA ABottom = ABottom
+  upperA (A m e s) = A (m+e) 0 s
+  upperA (A' m e s) = A' (m-e) 0 s
+  -- |Gives the centre of an 'A' as an exact 'A'.
+  centreA ABottom = ABottom
+  centreA (A m _ s) = A m 0 s
+  centreA (A' m _ s) = A' m 0 s -- This doesn't really make sense.
+  -- |Returns 'True' if the approximation is exact, i.e., it's diameter is 0.
+  exact (A _ 0 _) = True
+  exact (A' _ 0 _) = True
+  exact _ = False
+  -- |Checks if a number is approximated by an approximation, i.e., if it
+  -- belongs to the interval encoded by the approximation.
+  _ `approximatedBy` ABottom = True
+  r `approximatedBy` (A m e s) =
+    let r' = toRational r
+    in toRational (m-e)*2^^s <= r' && r' <= toRational (m+e)*2^^s
+  0 `approximatedBy` (A' _ _ _) = False
+  r `approximatedBy` (A' m e s) =
+    let r' = 1 / toRational r
+    in toRational (m-e)*2^^s <= r' && r' <= toRational (m+e)*2^^s
+  -- |A partial order on approximations. The first approximation is better than
+  -- the second if it is a sub-interval of the second.
+  _ `better` ABottom = True
+  ABottom `better` _ = False
+  (A m e s) `better` (A n f t) =
+    toRational (m-e)*2^^s >= toRational (n-f)*2^^t
+    && toRational (m+e)*2^^s <= toRational (n+f)*2^^t
+  (A m e s) `better` (A' n f t) =
+    toRational (m-e)*2^^s >= 1/(toRational (n+f)*2^^t)
+    && toRational (m+e)*2^^s <= 1/(toRational (n-f)*2^^t)
+  (A' m e s) `better` (A n f t) =
+    1/(toRational (m+e)*2^^s) >= toRational (n-f)*2^^t
+    && 1/(toRational (m-e)*2^^s) <= toRational (n+f)*2^^t
+  (A' m e s) `better` (A' n f t) =
+    toRational (m-e)*2^^s >= toRational (n-f)*2^^t
+    && toRational (m+e)*2^^s <= toRational (n+f)*2^^t
+
 {-
 -- |Construct a centred approximation from the end-points.
 endToApprox :: Extended Dyadic -> Extended Dyadic -> Approx

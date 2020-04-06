@@ -21,6 +21,14 @@ class ApproxOps a where
   showA :: a -> String
   showInBaseA :: Int -> a -> String
 
+class IntervalOps a where
+  lowerA :: a -> a
+  upperA :: a -> a
+  centreA :: a -> a
+  exact :: a -> Bool
+  approximatedBy :: Real b => b -> a -> Bool
+  better :: a -> a -> Bool
+
 -- |Number of bits that error term is allowed to take up. A larger size allows
 -- for more precise but slightly more costly computations. The value here is
 -- suggested by test runs.

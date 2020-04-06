@@ -367,25 +367,10 @@ upperBound :: Approx -> Extended Dyadic
 upperBound (Approx m e s) = Finite ((m+e):^s)
 upperBound Bottom = PosInf
 
--- |Gives the lower bound of an 'Approx' as an exact 'Approx'.
-lowerA :: Approx -> Approx
-lowerA Bottom = Bottom
-lowerA (Approx m e s) = Approx (m-e) 0 s
-
--- |Gives the upper bound of an 'Approx' as an exact 'Approx'.
-upperA :: Approx -> Approx
-upperA Bottom = Bottom
-upperA (Approx m e s) = Approx (m+e) 0 s
-
 -- |Gives the mid-point of an approximation as a 'Maybe' 'Dyadic' number.
 centre :: Approx -> Maybe Dyadic
 centre (Approx m _ s) = Just (m:^s)
 centre _ = Nothing
-
--- |Gives the centre of an 'Approx' as an exact 'Approx'.
-centreA :: Approx -> Approx
-centreA Bottom = Bottom
-centreA (Approx m _ s) = Approx m 0 s
 
 -- |Gives the radius of an approximation as a 'Dyadic' number. Currently a
 -- partial function. Should be made to return an 'Extended' 'Dyadic'.
@@ -398,28 +383,33 @@ diameter :: Approx -> Extended Dyadic
 diameter (Approx _ e s) = Finite $ 2 * (e:^s)
 diameter _ = PosInf
 
--- |Returns 'True' if the approximation is exact, i.e., it's diameter is 0.
-exact :: Approx -> Bool
-exact (Approx _ 0 _) = True
-exact _ = False
-
--- |Checks if a number is approximated by an approximation, i.e., if it
--- belongs to the interval encoded by the approximation.
-approximatedBy :: Real a => a -> Approx -> Bool
-_ `approximatedBy` Bottom = True
-r `approximatedBy` d =
-    let r' = toRational r
-    in toRational (lowerBound d) <= r' && r' <= toRational (upperBound d)
-
--- |A partial order on approximations. The first approximation is better than
--- the second if it is a sub-interval of the second.
-better :: Approx -> Approx -> Bool
-d `better` e = lowerBound d >= lowerBound e &&
-               upperBound d <= upperBound e
-
 -- |Turns a 'Dyadic' number into an exact approximation.
 fromDyadic :: Dyadic -> Approx
 fromDyadic (m:^s) = Approx m 0 s
+
+instance IntervalOps Approx where
+  -- |Gives the lower bound of an 'Approx' as an exact 'Approx'.
+  lowerA Bottom = Bottom
+  lowerA (Approx m e s) = Approx (m-e) 0 s
+  -- |Gives the upper bound of an 'Approx' as an exact 'Approx'.
+  upperA Bottom = Bottom
+  upperA (Approx m e s) = Approx (m+e) 0 s
+  -- |Gives the centre of an 'Approx' as an exact 'Approx'.
+  centreA Bottom = Bottom
+  centreA (Approx m _ s) = Approx m 0 s
+  -- |Returns 'True' if the approximation is exact, i.e., it's diameter is 0.
+  exact (Approx _ 0 _) = True
+  exact _ = False
+  -- |Checks if a number is approximated by an approximation, i.e., if it
+  -- belongs to the interval encoded by the approximation.
+  _ `approximatedBy` Bottom = True
+  r `approximatedBy` d =
+    let r' = toRational r
+    in toRational (lowerBound d) <= r' && r' <= toRational (upperBound d)
+  -- |A partial order on approximations. The first approximation is better than
+  -- the second if it is a sub-interval of the second.
+  d `better` e = lowerBound d >= lowerBound e &&
+                 upperBound d <= upperBound e
 
 -- |Two approximations are equal if they encode the same interval.
 instance Eq Approx where

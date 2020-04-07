@@ -460,96 +460,72 @@ upperBound :: Approx -> Extended Dyadic
 upperBound (Approx m e s) = Finite ((m+e):^s)
 upperBound ABottom = PosInf
 
--- |Gives the lower bound of an 'Approx' as an exact 'Approx'.
-lowerA :: Approx -> Approx
-lowerA ABottom = ABottom
-lowerA (Approx m e s) = Approx (m-e) 0 s
-
--- |Gives the upper bound of an 'Approx' as an exact 'Approx'.
-upperA :: Approx -> Approx
-upperA ABottom = ABottom
-upperA (Approx m e s) = Approx (m+e) 0 s
-
 -- |Gives the mid-point of an approximation as a 'Maybe' 'Dyadic' number.
 centre :: Approx -> Maybe Dyadic
 centre (Approx m _ s) = Just (m:^s)
 centre _ = Nothing
-
--- |Gives the centre of an 'Approx' as an exact 'Approx'.
-centreA :: Approx -> Approx
-centreA ABottom = ABottom
-centreA (Approx m _ s) = Approx m 0 s
-
--- |Gives the radius of an approximation as a 'Dyadic' number. Currently a
--- partial function. Should be made to return an 'Extended' 'Dyadic'.
-radius :: Approx -> Extended Dyadic
-radius (Approx _ e s) = Finite (e:^s)
-radius _ = PosInf
-
--- |Gives the lower bound of an approximation as an 'Extended' 'Dyadic' number.
-diameter :: Approx -> Extended Dyadic
-diameter (Approx _ e s) = Finite $ 2 * (e:^s)
-diameter _ = PosInf
 
 -- |Returns 'True' if the approximation is exact, i.e., it's diameter is 0.
 exact :: Approx -> Bool
 exact (Approx _ 0 _) = True
 exact _ = False
 
--- |Checks if a number is approximated by an approximation, i.e., if it
--- belongs to the interval encoded by the approximation.
-approximatedBy :: Real a => a -> Approx -> Bool
-_ `approximatedBy` ABottom = True
-r `approximatedBy` d =
-    let r' = toRational r
-    in toRational (lowerBound d) <= r' && r' <= toRational (upperBound d)
-
--- |A partial order on approximations. The first approximation is better than
--- the second if it is a sub-interval of the second.
-better :: Approx -> Approx -> Bool
-d `better` e = lowerBound d >= lowerBound e &&
-               upperBound d <= upperBound e
-
 -- |Turns a 'Dyadic' number into an exact approximation.
 fromDyadic :: Dyadic -> Approx
 fromDyadic (m:^s) = Approx m 0 s
+-}
 
 -- |Two approximations are equal if they encode the same interval.
-instance Eq Approx where
-    (Approx m e s) == (Approx n f t)
-        | s >= t = let k = s-t
-                   in unsafeShiftL m k == n && unsafeShiftL e k == f
-        | s <  t = let k = t-s
-                   in m == unsafeShiftL n k && e == unsafeShiftL f k
-    ABottom == ABottom = True
-    _ == _ = False
+instance Eq A where
+  (A m e s) == (A n f t)
+    | s >= t = let k = s-t
+               in unsafeShiftL m k == n && unsafeShiftL e k == f
+    | s <  t = let k = t-s
+               in m == unsafeShiftL n k && e == unsafeShiftL f k
+  (A' m e s) == (A' n f t)
+    | s >= t = let k = s-t
+               in unsafeShiftL m k == n && unsafeShiftL e k == f
+    | s <  t = let k = t-s
+               in m == unsafeShiftL n k && e == unsafeShiftL f k
+  -- (m±e)(n±f)2^(s+t)=1 ⇔ mn-ef=2^(-s-t) as mf=ne must hold. And 0 of ∞ can't
+  -- belong to either so |m|>e (and therefore |n|>f).
+  (A m e s) == (A' n f t)
+    | k <= 0 && abs m > e = m*n-e*f == bit (-k)
+    where k = s+t
+  (A' m e s) == (A n f t)
+    | k <= 0 && abs m > e = m*n-e*f == bit (-k)
+    where k = s+t
+  ABottom == ABottom = True
+  _ == _ = False
 
--- |Not a sensible instance. Just used to allow to allow enumerating integers
--- using \'..\' notation.
-instance Enum Approx where
-    toEnum n = Approx (fromIntegral n) 0 0
-    fromEnum (Approx m _ s) = fromIntegral $ shift m s
+-- |Not a sensible instance. Just used to allow enumerating integers using
+-- \'..\' notation.
+instance Enum A where
+    toEnum n = A (fromIntegral n) 0 0
+    fromEnum (A m _ s) = fromIntegral $ shift m s
+    fromEnum (A' m _ s) = fromIntegral $ shift m s
     fromEnum ABottom = 0
 
-instance Num Approx where
-    (Approx m e s) + (Approx n f t)
+{-
+instance Num A where
+    (A m e s) + (A n f t)
         | s >= t = let k = s-t
-                   in Approx (unsafeShiftL m k + n) (unsafeShiftL e k + f) t
+                   in A (unsafeShiftL m k + n) (unsafeShiftL e k + f) t
         | s <  t = let k = t-s
-                   in Approx (m + unsafeShiftL n k) (e + unsafeShiftL f k) s
+                   in A (m + unsafeShiftL n k) (e + unsafeShiftL f k) s
     _ + _ = ABottom
-    (Approx m e s) * (Approx n f t)
-        | am >= e && an >= f && a > 0           = Approx (a+d) (ab+ac) u
-        | am >= e && an >= f && a < 0           = Approx (a-d) (ab+ac) u
-        | am < e && n >= f                      = Approx (a+b) (ac+d) u
-        | am < e && -n >= f                     = Approx (a-b) (ac+d) u
-        | m >= e && an < f                      = Approx (a+c) (ab+d) u
-        | -m >= e && an < f                     = Approx (a-c) (ab+d) u
-        | a == 0                                = Approx (0) (ab+ac+d) u
-        | am < e && an < f && a > 0 && ab > ac  = Approx (a+ac) (ab+d) u
-        | am < e && an < f && a > 0 && ab <= ac = Approx (a+ab) (ac+d) u
-        | am < e && an < f && a < 0 && ab > ac  = Approx (a-ac) (ab+d) u
-        | am < e && an < f && a < 0 && ab <= ac = Approx (a-ab) (ac+d) u
+    (A m e s) * (A n f t)
+        | am >= e && an >= f && a > 0           = A (a+d) (ab+ac) u
+        | am >= e && an >= f && a < 0           = A (a-d) (ab+ac) u
+        | am < e && n >= f                      = A (a+b) (ac+d) u
+        | am < e && -n >= f                     = A (a-b) (ac+d) u
+        | m >= e && an < f                      = A (a+c) (ab+d) u
+        | -m >= e && an < f                     = A (a-c) (ab+d) u
+        | a == 0                                = A (0) (ab+ac+d) u
+        | am < e && an < f && a > 0 && ab > ac  = A (a+ac) (ab+d) u
+        | am < e && an < f && a > 0 && ab <= ac = A (a+ab) (ac+d) u
+        | am < e && an < f && a < 0 && ab > ac  = A (a-ac) (ab+d) u
+        | am < e && an < f && a < 0 && ab <= ac = A (a-ab) (ac+d) u
       where am = (abs m)
             an = (abs n)
             a = m*n
@@ -560,21 +536,21 @@ instance Num Approx where
             ac = (abs c)
             u = s+t
     _ * _ = ABottom
-    negate (Approx m e s) = Approx (-m) e s
+    negate (A m e s) = A (-m) e s
     negate ABottom = ABottom
-    abs (Approx m e s)
+    abs (A m e s)
         | m' < e    = let e' = m'+e
-                      in Approx e' e' (s-1)
-        | otherwise = Approx m' e s
+                      in A e' e' (s-1)
+        | otherwise = A m' e s
       where m' = abs m
     abs ABottom = ABottom
-    signum (Approx m e _)
-        | e == 0 = Approx (signum m) 0 0
-        | abs m < e = Approx 0 1 0
-        | abs m == e = Approx (signum m) 1 (-1)
-        | otherwise = Approx (signum m) 0 0
-    signum ABottom = Approx 0 1 0
-    fromInteger i = Approx i 0 0
+    signum (A m e _)
+        | e == 0 = A (signum m) 0 0
+        | abs m < e = A 0 1 0
+        | abs m == e = A (signum m) 1 (-1)
+        | otherwise = A (signum m) 0 0
+    signum ABottom = A 0 1 0
+    fromInteger i = A i 0 0
 
 -- |Convert a rational number into an approximation of that number with
 -- 'Precision' bits correct after the binary point.

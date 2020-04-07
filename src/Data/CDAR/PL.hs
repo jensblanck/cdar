@@ -10,6 +10,7 @@ For more information on the theoretical aspects see <http://cs.swan.ac.uk/~csjen
 -}
 module Data.CDAR.PL (A(..)
                     ,PL(..)
+                    ,plus
 {-                        ,Precision
                         ,showA
                         ,showInBaseA
@@ -506,7 +507,8 @@ instance Enum A where
     fromEnum (A' m _ s) = fromIntegral $ shift m s
     fromEnum ABottom = 0
 
-{-
+plus (A' m e s) (A' n f t) = (((A n f (-s)) + (A m e (-t))), ((A m e 0)*(A n f 0)))
+
 instance Num A where
     (A m e s) + (A n f t)
         | s >= t = let k = s-t
@@ -552,6 +554,7 @@ instance Num A where
     signum ABottom = A 0 1 0
     fromInteger i = A i 0 0
 
+{-
 -- |Convert a rational number into an approximation of that number with
 -- 'Precision' bits correct after the binary point.
 toApprox :: Precision -> Rational -> Approx

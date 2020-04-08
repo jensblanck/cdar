@@ -11,6 +11,7 @@ For more information on the theoretical aspects see <http://cs.swan.ac.uk/~csjen
 module Data.CDAR.PL (A(..)
                     ,PL(..)
                     ,plus
+                    ,recipA'
 {-                        ,Precision
                         ,showA
                         ,showInBaseA
@@ -507,7 +508,7 @@ instance Enum A where
     fromEnum (A' m _ s) = fromIntegral $ shift m s
     fromEnum ABottom = 0
 
-plus (A' m e s) (A' n f t) = (((A n f (-s)) + (A m e (-t))), ((A m e 0)*(A n f 0)))
+plus (A' m e s) (A' n f t) = (((A n f (-s)) + (A m e (-t))) / ((A m e 0)*(A n f 0)))
 
 instance Num A where
     (A m e s) + (A n f t)
@@ -537,13 +538,52 @@ instance Num A where
             ab = (abs b)
             ac = (abs c)
             u = s+t
+    (A' m e s) * (A' n f t)
+        | am >= e && an >= f && a > 0           = A' (a+d) (ab+ac) u
+        | am >= e && an >= f && a < 0           = A' (a-d) (ab+ac) u
+        | am < e && n >= f                      = A' (a+b) (ac+d) u
+        | am < e && -n >= f                     = A' (a-b) (ac+d) u
+        | m >= e && an < f                      = A' (a+c) (ab+d) u
+        | -m >= e && an < f                     = A' (a-c) (ab+d) u
+        | a == 0                                = A' (0) (ab+ac+d) u
+        | am < e && an < f && a > 0 && ab > ac  = A' (a+ac) (ab+d) u
+        | am < e && an < f && a > 0 && ab <= ac = A' (a+ab) (ac+d) u
+        | am < e && an < f && a < 0 && ab > ac  = A' (a-ac) (ab+d) u
+        | am < e && an < f && a < 0 && ab <= ac = A' (a-ab) (ac+d) u
+      where am = (abs m)
+            an = (abs n)
+            a = m*n
+            b = m*f
+            c = n*e
+            d = e*f
+            ab = (abs b)
+            ac = (abs c)
+            u = s+t
+    (x@(A m e s)) * (y@(A' n f t))
+      | am <= e && an <= f = ABottom
+      | an <= f            = recipA' defaultPrecision (A' m e s)*y
+      | otherwise          = x*recipA' defaultPrecision (A n f t)
+      where am = abs m
+            an = abs n
+    (x@(A' m e s)) * (y@(A n f t))
+      | am <= e && an <= f = ABottom
+      | am <= e            = x*recipA' defaultPrecision (A' n f t)
+      | otherwise          = recipA' defaultPrecision (A m e s)*y
+      where am = abs m
+            an = abs n
     _ * _ = ABottom
     negate (A m e s) = A (-m) e s
+    negate (A' m e s) = A' (-m) e s
     negate ABottom = ABottom
     abs (A m e s)
         | m' < e    = let e' = m'+e
                       in A e' e' (s-1)
         | otherwise = A m' e s
+      where m' = abs m
+    abs (A' m e s)
+        | m' < e    = let e' = m'+e
+                      in A' e' e' (s-1)
+        | otherwise = A' m' e s
       where m' = abs m
     abs ABottom = ABottom
     signum (A m e _)
@@ -551,47 +591,64 @@ instance Num A where
         | abs m < e = A 0 1 0
         | abs m == e = A (signum m) 1 (-1)
         | otherwise = A (signum m) 0 0
+    -- Signum chooses 'A' as the result type since it is required for the
+    -- middle two cases.
+    signum (A' m e _)
+        | e == 0 = A (signum m) 0 0
+        | abs m < e = A 0 1 0
+        | abs m == e = A (signum m) 1 (-1)
+        | otherwise = A (signum m) 0 0
     signum ABottom = A 0 1 0
     fromInteger i = A i 0 0
 
-{-
 -- |Convert a rational number into an approximation of that number with
 -- 'Precision' bits correct after the binary point.
-toApprox :: Precision -> Rational -> Approx
-toApprox t r = Approx (2 * round (r*2^^t)) 1 (-t - 1)
+toA :: Precision -> Rational -> A
+toA t r = A (2 * round (r*2^^t)) 1 (-t - 1)
 
--- |Not a proper Fractional type as Approx are intervals.
-instance Fractional Approx where
-    fromRational = toApprox defaultPrecision
-    recip = recipA defaultPrecision
+-- |Not a proper Fractional type as A are intervals.
+instance Fractional A where
+    fromRational = toA defaultPrecision
+    recip = recipA' defaultPrecision
 
 -- |Compute the reciprocal of an approximation. The number of bits after the
 -- binary point is bounded by the 'Precision' argument if the input is exact.
 -- Otherwise, a good approximation with essentially the same significance as
 -- the input will be computed.
-recipA :: Precision -> Approx -> Approx
-recipA _ ABottom = ABottom
-recipA t (Approx m e s)
+recipA' :: Precision -> A -> A
+recipA' _ ABottom = ABottom
+recipA' _ (A 0 0 s) = A' 0 0 s
+recipA' t (A m e s)
     | e == 0      = let s' = integerLog2 (abs m)
-                    in Approx
+                    in A
                          (round (bit (s'+t+2) % m))
                          1
                          (-s-s'-t-2)
     | (abs m) > e = let d = m*m-e*e
                         d2 = unsafeShiftR d 1
                         s' = integerLog2 d + 2 * errorBits
-                    in boundErrorTerm $ Approx
+                    in boundErrorTerm $ A
                            ((unsafeShiftL m s' + d2) `div` d)
                            ((unsafeShiftL e s' + d2+1) `div` d + 1)
                            (-s-s')
-    --  (abs m) > e = let d = m*m-e*e
-    --                     s' = 2 * (integerLog2 m + errorBits)
-    --                 in boundErrorTerm $ Approx
-    --                        (round (unsafeShiftL m s'%(d)))
-    --                        (ceiling (1%2 + unsafeShiftL e s'%(d)))
-    --                        (-s-s')
-    | otherwise   = ABottom
+    | otherwise   = A' m e s
+recipA' _ (A' 0 0 s) = A 0 0 s
+recipA' t (A' m e s)
+    | e == 0      = let s' = integerLog2 (abs m)
+                    in A'
+                         (round (bit (s'+t+2) % m))
+                         1
+                         (-s-s'-t-2)
+    | (abs m) > e = let d = m*m-e*e
+                        d2 = unsafeShiftR d 1
+                        s' = integerLog2 d + 2 * errorBits
+                    in boundErrorTerm $ A'
+                           ((unsafeShiftL m s' + d2) `div` d)
+                           ((unsafeShiftL e s' + d2+1) `div` d + 1)
+                           (-s-s')
+    | otherwise   = A m e s
 
+{-
 -- |Divide an approximation by an integer.
 divAInteger :: Approx -> Integer -> Approx
 divAInteger ABottom _ = ABottom
@@ -664,6 +721,7 @@ significance (Approx m 1 _) =  Finite $ integerLog2 (abs m) - 1
 significance (Approx m e _) =
     Finite $ (integerLog2 (abs m)) - (integerLog2 (e-1)) - 1
 significance ABottom         = NegInf
+-}
 
 {-|
 This function bounds the error term of an 'Approx'.
@@ -687,9 +745,9 @@ desirable to be as close to the identity as possible.
 
 This function will map a converging sequence to a converging sequence.
 -}
-boundErrorTerm :: Approx -> Approx
+boundErrorTerm :: A -> A
 boundErrorTerm ABottom = ABottom
-boundErrorTerm a@(Approx m e s)
+boundErrorTerm a@(A m e s)
     | e < errorBound = a
     | otherwise =
         let k = integerLog2 e + 1 - errorBits
@@ -698,9 +756,21 @@ boundErrorTerm a@(Approx m e s)
             -- may overflow and use errorBits+1
             e' = unsafeShiftR (e + bit (k-1)) k + 1 
         in if t
-           then Approx (m'+1) e' (s+k)
-           else Approx m'     e' (s+k)
+           then A (m'+1) e' (s+k)
+           else A m'     e' (s+k)
+boundErrorTerm a@(A' m e s)
+    | e < errorBound = a
+    | otherwise =
+        let k = integerLog2 e + 1 - errorBits
+            t = testBit m (k-1)
+            m' = unsafeShiftR m k
+            -- may overflow and use errorBits+1
+            e' = unsafeShiftR (e + bit (k-1)) k + 1 
+        in if t
+           then A' (m'+1) e' (s+k)
+           else A' m'     e' (s+k)
 
+{-
 {-|
 Limits the size of an approximation by restricting how much precision an
 approximation can have.

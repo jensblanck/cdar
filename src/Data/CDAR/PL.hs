@@ -10,7 +10,8 @@ For more information on the theoretical aspects see <http://cs.swan.ac.uk/~csjen
 -}
 module Data.CDAR.PL (A(..)
                     ,PL(..)
-                    ,plus
+                    ,plusA
+                    ,timesA
                     ,recipA'
 {-                        ,Precision
                         ,showA
@@ -508,8 +509,6 @@ instance Enum A where
     fromEnum (A' m _ s) = fromIntegral $ shift m s
     fromEnum ABottom = 0
 
-plus (A' m e s) (A' n f t) = (((A n f (-s)) + (A m e (-t))) / ((A m e 0)*(A n f 0)))
-
 instance Num A where
     (A m e s) + (A n f t)
         | s >= t = let k = s-t
@@ -517,61 +516,7 @@ instance Num A where
         | s <  t = let k = t-s
                    in A (m + unsafeShiftL n k) (e + unsafeShiftL f k) s
     _ + _ = ABottom
-    (A m e s) * (A n f t)
-        | am >= e && an >= f && a > 0           = A (a+d) (ab+ac) u
-        | am >= e && an >= f && a < 0           = A (a-d) (ab+ac) u
-        | am < e && n >= f                      = A (a+b) (ac+d) u
-        | am < e && -n >= f                     = A (a-b) (ac+d) u
-        | m >= e && an < f                      = A (a+c) (ab+d) u
-        | -m >= e && an < f                     = A (a-c) (ab+d) u
-        | a == 0                                = A (0) (ab+ac+d) u
-        | am < e && an < f && a > 0 && ab > ac  = A (a+ac) (ab+d) u
-        | am < e && an < f && a > 0 && ab <= ac = A (a+ab) (ac+d) u
-        | am < e && an < f && a < 0 && ab > ac  = A (a-ac) (ab+d) u
-        | am < e && an < f && a < 0 && ab <= ac = A (a-ab) (ac+d) u
-      where am = (abs m)
-            an = (abs n)
-            a = m*n
-            b = m*f
-            c = n*e
-            d = e*f
-            ab = (abs b)
-            ac = (abs c)
-            u = s+t
-    (A' m e s) * (A' n f t)
-        | am >= e && an >= f && a > 0           = A' (a+d) (ab+ac) u
-        | am >= e && an >= f && a < 0           = A' (a-d) (ab+ac) u
-        | am < e && n >= f                      = A' (a+b) (ac+d) u
-        | am < e && -n >= f                     = A' (a-b) (ac+d) u
-        | m >= e && an < f                      = A' (a+c) (ab+d) u
-        | -m >= e && an < f                     = A' (a-c) (ab+d) u
-        | a == 0                                = A' (0) (ab+ac+d) u
-        | am < e && an < f && a > 0 && ab > ac  = A' (a+ac) (ab+d) u
-        | am < e && an < f && a > 0 && ab <= ac = A' (a+ab) (ac+d) u
-        | am < e && an < f && a < 0 && ab > ac  = A' (a-ac) (ab+d) u
-        | am < e && an < f && a < 0 && ab <= ac = A' (a-ab) (ac+d) u
-      where am = (abs m)
-            an = (abs n)
-            a = m*n
-            b = m*f
-            c = n*e
-            d = e*f
-            ab = (abs b)
-            ac = (abs c)
-            u = s+t
-    (x@(A m e s)) * (y@(A' n f t))
-      | am <= e && an <= f = ABottom
-      | an <= f            = recipA' defaultPrecision (A' m e s)*y
-      | otherwise          = x*recipA' defaultPrecision (A n f t)
-      where am = abs m
-            an = abs n
-    (x@(A' m e s)) * (y@(A n f t))
-      | am <= e && an <= f = ABottom
-      | am <= e            = x*recipA' defaultPrecision (A' n f t)
-      | otherwise          = recipA' defaultPrecision (A m e s)*y
-      where am = abs m
-            an = abs n
-    _ * _ = ABottom
+    x * y = timesA defaultPrecision x y
     negate (A m e s) = A (-m) e s
     negate (A' m e s) = A' (-m) e s
     negate ABottom = ABottom
@@ -610,6 +555,68 @@ toA t r = A (2 * round (r*2^^t)) 1 (-t - 1)
 instance Fractional A where
     fromRational = toA defaultPrecision
     recip = recipA' defaultPrecision
+
+plusA :: Precision -> A -> A -> A
+plusA _ (A m e s) (A n f t)
+  | s >= t = let k = s-t
+             in A (unsafeShiftL m k + n) (unsafeShiftL e k + f) t
+  | s <  t = let k = t-s
+             in A (m + unsafeShiftL n k) (e + unsafeShiftL f k) s
+plusA p x@(A m e s) y@(A' n f t)
+  | abs n <= f = plusA p (recipA' p (A' m e s)) y
+  | otherwise = plusA p x (recipA' p (A n f t))
+plusA p x@(A' m e s) y@(A n f t)
+  | abs m <= e = plusA p x (recipA' p (A' n f t))
+  | otherwise = plusA p (recipA' p (A m e s)) y
+plusA p (A' m e s) (A' n f t) =
+  timesA p
+    (plusA p (A n f (-s)) (A m e (-t)))
+    (recipA' p (timesA p (A m e 0) (A n f 0)))
+plusA _ _ _ = ABottom
+
+timesA :: Precision -> A -> A -> A
+timesA _ x@(A _ _ _) y@(A _ _ _) = timesA' x y
+timesA _ (A' m e s) (A' n f t) =
+  let (A m' e' s') = timesA' (A m e s) (A n f t)
+  in A' m' e' s'
+timesA p x@(A m e s) y@(A' n f t)
+  | am <= e && an <= f = ABottom
+  | an <= f            = recipA' p (A' m e s)*y
+  | otherwise          = x*recipA' p (A n f t)
+  where am = abs m
+        an = abs n
+timesA p x@(A' m e s) y@(A n f t)
+  | am <= e && an <= f = ABottom
+  | am <= e            = x*recipA' p (A' n f t)
+  | otherwise          = recipA' p (A m e s)*y
+  where am = abs m
+        an = abs n
+timesA _ _ _ = ABottom
+
+timesA' :: A -> A -> A
+timesA' (A m e s) (A n f t)
+  | am >= e && an >= f && a > 0           = A (a+d) (ab+ac) u
+  | am >= e && an >= f && a < 0           = A (a-d) (ab+ac) u
+  | am < e && n >= f                      = A (a+b) (ac+d) u
+  | am < e && -n >= f                     = A (a-b) (ac+d) u
+  | m >= e && an < f                      = A (a+c) (ab+d) u
+  | -m >= e && an < f                     = A (a-c) (ab+d) u
+  | a == 0                                = A (0) (ab+ac+d) u
+  | am < e && an < f && a > 0 && ab > ac  = A (a+ac) (ab+d) u
+  | am < e && an < f && a > 0 && ab <= ac = A (a+ab) (ac+d) u
+  | am < e && an < f && a < 0 && ab > ac  = A (a-ac) (ab+d) u
+  | am < e && an < f && a < 0 && ab <= ac = A (a-ab) (ac+d) u
+  where am = (abs m)
+        an = (abs n)
+        a = m*n
+        b = m*f
+        c = n*e
+        d = e*f
+        ab = (abs b)
+        ac = (abs c)
+        u = s+t
+timesA' _ _ = error "Illegal call to timesA'."
+
 
 -- |Compute the reciprocal of an approximation. The number of bits after the
 -- binary point is bounded by the 'Precision' argument if the input is exact.

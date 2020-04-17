@@ -13,6 +13,8 @@ module Data.CDAR.PL (A(..)
                     ,plusA
                     ,timesA
                     ,recipA'
+                    ,divAInteger'
+                    ,compareA'
 {-                        ,Precision
                         ,showA
                         ,showInBaseA
@@ -655,16 +657,17 @@ recipA' t (A' m e s)
                            (-s-s')
     | otherwise   = A m e s
 
-{-
 -- |Divide an approximation by an integer.
-divAInteger :: Approx -> Integer -> Approx
-divAInteger ABottom _ = ABottom
-divAInteger (Approx m e s) n =
-  let t = integerLog2 n
-  in Approx (round (unsafeShiftL m t % n))
-             (ceiling (unsafeShiftL e t % n))
-             s
+divAInteger' :: A -> Integer -> A
+divAInteger' ABottom _ = ABottom
+divAInteger' (A m e s) n =
+  let t = 1 + integerLog2 n
+  in A (round (unsafeShiftL m t % n))
+       (max 1 (ceiling (unsafeShiftL e t % n)))
+       (s - t)
+divAInteger' (A' m e s) n = A' (m*n) (e*n) s
 
+{-
 -- |Compute the modulus of two approximations.
 modA :: Approx -> Approx -> Approx
 modA (Approx m e s) (Approx n f t) =
@@ -684,18 +687,38 @@ divModA (Approx m e s) (Approx n f t) =
         e' = e + abs d * f
     in (fromIntegral d, Approx m' e' r)
 divModA _ _ = (ABottom, ABottom)
+-}
 
--- | Compare 'Approx' with a partial result.
-compareA :: Approx -> Approx -> Maybe Ordering
-compareA (Approx m e s) (Approx n f t)
+-- | Compare 'A' with a partial result.
+compareA' :: A -> A -> Maybe Ordering
+compareA' (A m e s) (A n f t)
   | abs ((m:^s)-(n:^t)) > (e:^s)+(f:^t) = Just $ compare (m:^s) (n:^t)
   | otherwise                           = Nothing
-compareA _ _ = Nothing
+compareA' (A' m e s) (A' n f t)
+  | abs m <= e || abs n <= f            = Nothing
+  | abs ((m:^s)-(n:^t)) > (e:^s)+(f:^t) = Just $ compare (n:^t) (m:^s)
+  | otherwise                           = Nothing
+compareA' (A m e s) (A' n f t)
+  | abs n <= f = Nothing
+  | n > 0 && (m + e)*(n + f) < bit (max 0 (-s-t)) = Just LT
+  | n > 0 && (m - e)*(n - f) > bit (max 0 (-s-t)) = Just GT
+  | n < 0 && (m + e)*(n + f) > bit (max 0 (-s-t)) = Just LT
+  | n < 0 && (m - e)*(n - f) < bit (max 0 (-s-t)) = Just GT
+  | otherwise = Nothing
+compareA' (A' m e s) (A n f t)
+  | abs m <= e = Nothing
+  | m > 0 && (m - e)*(n - f) > bit (max 0 (-s-t)) = Just LT
+  | m > 0 && (m + e)*(n + f) < bit (max 0 (-s-t)) = Just GT
+  | m < 0 && (m - e)*(n - f) < bit (max 0 (-s-t)) = Just LT
+  | m < 0 && (m + e)*(n + f) > bit (max 0 (-s-t)) = Just GT
+  | otherwise = Nothing
+compareA' _ _ = Nothing
 
--- |Not a proper Ord type as Approx are intervals.
-instance Ord Approx where
-  compare x y = maybe (error "compare: comparisons are partial on Approx") id $ compareA x y
+-- |Not a proper Ord type as A are intervals.
+instance Ord A where
+  compare x y = maybe (error "compare: comparisons are partial on A") id $ compareA' x y
 
+{-
 -- |The 'toRational' function is partial since there is no good rational
 -- number to return for the trivial approximation 'ABottom'.
 --

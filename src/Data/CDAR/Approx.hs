@@ -514,10 +514,10 @@ recipA t (Approx m e s)
 divAInteger :: Approx -> Integer -> Approx
 divAInteger Bottom _ = Bottom
 divAInteger (Approx m e s) n =
-  let t = integerLog2 n
+  let t = 1 + integerLog2 n
   in Approx (round (unsafeShiftL m t % n))
-             (ceiling (unsafeShiftL e t % n))
-             s
+            (max 1 (ceiling (unsafeShiftL e t % n)))
+            (s - t)
 
 -- |Compute the modulus of two approximations.
 modA :: Approx -> Approx -> Approx

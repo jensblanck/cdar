@@ -261,7 +261,7 @@ be after the decimal point) means that the last position may be off by 1,
 i.e., it could be down to 0 or up to 2. And [0,2] is indeed the range encoded
 by the above approximation.
 -}
-instance ApproxOps Approx where
+instance ShowApprox Approx where
   --showA :: Approx -> String
   showA = showInBaseA 10
 
@@ -562,9 +562,9 @@ instance Real Approx where
     toRational _ = undefined
 
 -- |Convert the centre of an approximation into a 'Maybe' 'Double'.
-toDoubleA :: Approx -> Maybe Double
-toDoubleA = fmap (fromRational . toRational) . centre
-
+instance ToDouble Approx where
+  --toDoubleA :: Approx -> Maybe Double
+  toDoubleA = fmap (fromRational . toRational) . centre
 
 -- |Computes the precision of an approximation. This is roughly the number of
 -- correct bits after the binary point.
@@ -605,9 +605,10 @@ desirable to be as close to the identity as possible.
 
 This function will map a converging sequence to a converging sequence.
 -}
-boundErrorTerm :: Approx -> Approx
-boundErrorTerm Bottom = Bottom
-boundErrorTerm a@(Approx m e s)
+instance ApproxOps Approx where
+  --boundErrorTerm :: Approx -> Approx
+  boundErrorTerm Bottom = Bottom
+  boundErrorTerm a@(Approx m e s)
     | e < errorBound = a
     | otherwise =
         let k = integerLog2 e + 1 - errorBits
@@ -642,9 +643,9 @@ a fixed precision argument. However, if the function is applied with
 increasing precision for a converging sequence, then this will give a
 converging sequence.
 -}
-limitSize :: Precision -> Approx -> Approx
-limitSize _ Bottom = Bottom
-limitSize l a@(Approx m e s)
+  --limitSize :: Precision -> Approx -> Approx
+  limitSize _ Bottom = Bottom
+  limitSize l a@(Approx m e s)
     | k > 0     = Approx
                   ((if testBit m (k-1) then (+1) else id) (unsafeShiftR m k))
                   (1 + (unsafeShiftR (e + bit (k-1)) k))
@@ -654,47 +655,47 @@ limitSize l a@(Approx m e s)
 
 -- |Throws an exception if the precision of an approximation is not larger
 -- than the deafult minimum.
-checkPrecisionLeft :: Approx -> Approx
-checkPrecisionLeft a
+  --checkPrecisionLeft :: Approx -> Approx
+  checkPrecisionLeft a
         | precision a > pure defaultPrecision = a
         | otherwise = throw $ LossOfPrecision
 
 -- |Bounds the error term and limits the precision of an approximation.
 --
 -- It is always the case that @x `'better'` limitAndBound x@.
-limitAndBound :: Precision -> Approx -> Approx
-limitAndBound limit =
+  --limitAndBound :: Precision -> Approx -> Approx
+  limitAndBound limit =
     limitSize limit . boundErrorTerm
 
 -- | Find the hull of two approximations.
-unionA :: Approx -> Approx -> Approx
-unionA Bottom _ = Bottom
-unionA _ Bottom = Bottom
-unionA a b = endToApprox (lowerBound a `min` lowerBound b) (upperBound a `max` upperBound b)
+  --unionA :: Approx -> Approx -> Approx
+  unionA Bottom _ = Bottom
+  unionA _ Bottom = Bottom
+  unionA a b = endToApprox (lowerBound a `min` lowerBound b) (upperBound a `max` upperBound b)
 
 -- | Find the intersection of two approximations.
-intersectionA :: Approx -> Approx -> Approx
-intersectionA Bottom a = a
-intersectionA a Bottom = a
-intersectionA a b = if l <= u then endToApprox l u else error "Trying to take intersection of two non-overlapping Approx."
-  where l = (lowerBound a `max` lowerBound b)
-        u = (upperBound a `min` upperBound b)
+  --intersectionA :: Approx -> Approx -> Approx
+  intersectionA Bottom a = a
+  intersectionA a Bottom = a
+  intersectionA a b = if l <= u then endToApprox l u else error "Trying to take intersection of two non-overlapping Approx."
+    where l = (lowerBound a `max` lowerBound b)
+          u = (upperBound a `min` upperBound b)
 
 -- | Determine if two approximations overlap.
-consistentA :: Approx -> Approx -> Bool
-consistentA Bottom _ = True
-consistentA _ Bottom = True
-consistentA a b = (lowerBound a `max` lowerBound b) <= (upperBound a `min` upperBound b)
+  --consistentA :: Approx -> Approx -> Bool
+  consistentA Bottom _ = True
+  consistentA _ Bottom = True
+  consistentA a b = (lowerBound a `max` lowerBound b) <= (upperBound a `min` upperBound b)
 
 -- |Given a list of polynom coefficients and a value this evaluates the
 -- polynomial at that value.
 --
 -- Should give a tighter bound on the result since we reduce the dependency
 -- problem.
-poly :: [Approx] -> Approx -> Approx
-poly [] _ = 0
-poly _ Bottom = Bottom
-poly as x =
+  --poly :: [Approx] -> Approx -> Approx
+  poly [] _ = 0
+  poly _ Bottom = Bottom
+  poly as x =
     let --poly' :: [Dyadic] -> Dyadic -> Dyadic
         poly' as' x' = sum . zipWith (*) as' $ pow x'
         ms = map ((maybe (error "Can't compute poly with Bottom coefficients") id) . centre) as
@@ -706,6 +707,22 @@ poly as x =
         -- exponent above will be same as s
     in Approx m' e' s
 
+-- |Computes powers of approximations. Should give tighter intervals than the
+-- general 'pow' since take the dependency problem into account. However, so
+-- far benchmarking seems to indicate that the cost is too high, but this may
+-- depend on the application.
+  --powers :: Approx -> [Approx]
+  powers (Approx m e s) =
+    let ms = pow m
+        es = pow e
+        f = reverse . zipWith (*) ms . reverse . zipWith (*) es
+        sumAlt [] = (0,0)
+        sumAlt (x:[]) = (x,0)
+        sumAlt (x:y:xs) = let (a,b) = sumAlt xs in (a+x,b+y)
+        g s' (m', e') = Approx m' e' s'
+    in zipWith g (iterate (+s) 0) $ map (sumAlt . f) binomialCoefficients
+  powers _ = repeat Bottom
+
 -- |Gives a list of powers of a number, i.e., [1,x,x^2,...].
 pow :: (Num a) => a -> [a]
 pow x = iterate (* x) 1
@@ -715,22 +732,6 @@ binomialCoefficients :: (Num a) => [[a]]
 binomialCoefficients =
     let f ss = 1 : zipWith (+) ss (tail ss) ++ [1]
     in iterate f [1]
-
--- |Computes powers of approximations. Should give tighter intervals than the
--- general 'pow' since take the dependency problem into account. However, so
--- far benchmarking seems to indicate that the cost is too high, but this may
--- depend on the application.
-powers :: Approx -> [Approx]
-powers (Approx m e s) =
-    let ms = pow m
-        es = pow e
-        f = reverse . zipWith (*) ms . reverse . zipWith (*) es
-        sumAlt [] = (0,0)
-        sumAlt (x:[]) = (x,0)
-        sumAlt (x:y:xs) = let (a,b) = sumAlt xs in (a+x,b+y)
-        g s' (m', e') = Approx m' e' s'
-    in zipWith g (iterate (+s) 0) $ map (sumAlt . f) binomialCoefficients
-powers _ = repeat Bottom
 
 {-|
 Old implementation of sqrt using Heron's method. Using the current method

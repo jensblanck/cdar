@@ -17,7 +17,7 @@ instance Scalable Integer where
 
 type Precision = Int
 
-class ApproxOps a where
+class ShowApprox a where
   showA :: a -> String
   showInBaseA :: Int -> a -> String
 
@@ -28,6 +28,20 @@ class IntervalOps a where
   exact :: a -> Bool
   approximatedBy :: Real b => b -> a -> Bool
   better :: a -> a -> Bool
+
+class ToDouble a where
+  toDoubleA :: a -> Maybe Double
+
+class ApproxOps a where
+  boundErrorTerm :: a -> a
+  limitSize :: Precision -> a -> a
+  checkPrecisionLeft :: a -> a
+  limitAndBound :: Precision -> a -> a
+  unionA :: a -> a -> a
+  intersectionA :: a -> a -> a
+  consistentA :: a -> a -> Bool
+  poly :: [a] -> a -> a
+  powers :: a -> [a]
 
 -- |Number of bits that error term is allowed to take up. A larger size allows
 -- for more precise but slightly more costly computations. The value here is

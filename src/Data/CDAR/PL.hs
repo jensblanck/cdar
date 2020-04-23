@@ -10,11 +10,17 @@ For more information on the theoretical aspects see <http://cs.swan.ac.uk/~csjen
 -}
 module Data.CDAR.PL (A(..)
                     ,PL(..)
+                    ,endToA
+                    ,endToA'
+                    ,upperBound'
+                    ,lowerBound'
+                    ,centre'
                     ,plusA
                     ,timesA
                     ,recipA'
                     ,divAInteger'
                     ,compareA'
+                    , significance'
 {-                        ,Precision
                         ,showA
                         ,showInBaseA
@@ -269,7 +275,7 @@ be after the decimal point) means that the last position may be off by 1,
 i.e., it could be down to 0 or up to 2. And [0,2] is indeed the range encoded
 by the above approximation.
 -}
-instance ApproxOps A where
+instance ShowApprox A where
   showA = showInBaseA 10
 
 -- |Similar to 'showA' but can generate representations in other bases (<= 16).
@@ -440,36 +446,46 @@ instance IntervalOps A where
     toRational (m-e)*2^^s >= toRational (n-f)*2^^t
     && toRational (m+e)*2^^s <= toRational (n+f)*2^^t
 
-{-
 -- |Construct a centred approximation from the end-points.
-endToApprox :: Extended Dyadic -> Extended Dyadic -> Approx
-endToApprox (Finite l) (Finite u)
-  | u < l = ABottom -- Might be better with a signalling error.
-  | otherwise =
-    let a@(m:^s) = scale (l + u) (-1)
-        (n:^t)   = u-a
-        r        = min s t
+endToA :: A -> A -> A
+endToA (A m _ s) (A n _ t)
+  | n' < m' = ABottom -- Might be better with a signalling error.
+  | otherwise = (A (m'+n') (n'-m') (r-1))
+  where  r        = min s t
+         m'       = unsafeShiftL m (s-r)
+         n'       = unsafeShiftL n (t-r)
+endToA _ _ = ABottom
+
+-- |Construct a centred approximation from the end-points.
+endToA' :: A -> A -> A
+endToA' (A' m _ s) (A' n _ t)
+  | m' < n' = ABottom -- Might be better with a signalling error.
+  | otherwise = (A' (m'+n') (m'-n') (r-1))
+  where r        = min s t
         m'       = unsafeShiftL m (s-r)
         n'       = unsafeShiftL n (t-r)
-    in (Approx m' n' r)
-endToApprox _ _ = ABottom
+endToA' _ _ = ABottom
 
 -- Interval operations
 -- |Gives the lower bound of an approximation as an 'Extended' 'Dyadic' number.
-lowerBound :: Approx -> Extended Dyadic
-lowerBound (Approx m e s) = Finite ((m-e):^s)
-lowerBound ABottom = NegInf
+lowerBound' :: A -> Extended Rational
+lowerBound' (A m e s) = Finite ((m-e)%1 * 2^^ fromIntegral s)
+lowerBound' (A' m e s) = Finite ((toRational 2^^s) * (1 % (m+e)))
+lowerBound' ABottom = NegInf
 
 -- |Gives the upper bound of an approximation as an 'Extended' 'Dyadic' number.
-upperBound :: Approx -> Extended Dyadic
-upperBound (Approx m e s) = Finite ((m+e):^s)
-upperBound ABottom = PosInf
+upperBound' :: A -> Extended Rational
+upperBound' (A m e s) = Finite ((m+e)%1 * 2^^ fromIntegral s)
+upperBound' (A' m e s) = Finite ((toRational 2^^s) * (1 % (m-e)))
+upperBound' ABottom = PosInf
 
 -- |Gives the mid-point of an approximation as a 'Maybe' 'Dyadic' number.
-centre :: Approx -> Maybe Dyadic
-centre (Approx m _ s) = Just (m:^s)
-centre _ = Nothing
+centre' :: A -> Maybe Rational
+centre' (A m _ s) = Just (fromIntegral m * 2^^s)
+centre' (A' m _ s) = Just (2^s % m)
+centre' _ = Nothing
 
+{-
 -- |Returns 'True' if the approximation is exact, i.e., it's diameter is 0.
 exact :: Approx -> Bool
 exact (Approx _ 0 _) = True
@@ -718,40 +734,48 @@ compareA' _ _ = Nothing
 instance Ord A where
   compare x y = maybe (error "compare: comparisons are partial on A") id $ compareA' x y
 
-{-
 -- |The 'toRational' function is partial since there is no good rational
 -- number to return for the trivial approximation 'ABottom'.
 --
 -- Note that converting to a rational number will give only a single rational
 -- point. Do not expect to be able to recover the interval from this value.
-instance Real Approx where
-    toRational (Approx m e s) = approxRational
-                                  (toRational (m:^s))
-                                  (toRational (e:^s))
-    toRational _ = undefined
+instance Real A where
+  toRational (A m e s) = approxRational
+                           (toRational (m:^s))
+                           (toRational (e:^s))
+  toRational (A' m e s) = approxRational
+                            ((m % (m^2-e^2)) * 2^^(-s))
+                            ((e % (m^2-e^2)) * 2^^(-s))
+  toRational _ = undefined
 
 -- |Convert the centre of an approximation into a 'Maybe' 'Double'.
-toDoubleA :: Approx -> Maybe Double
-toDoubleA = fmap (fromRational . toRational) . centre
+instance ToDouble A where
+  --toDoubleA :: A -> Maybe Double
+  toDoubleA = fmap (fromRational . toRational) . centre'
 
-
+{-
 -- |Computes the precision of an approximation. This is roughly the number of
 -- correct bits after the binary point.
 precision :: Approx -> Extended Precision
 precision (Approx _ 0 _) = PosInf
 precision (Approx _ e s) = Finite $ - s - (integerLog2 e) - 1
 precision ABottom         = NegInf
+-}
 
 -- |Computes the significance of an approximation. This is roughly the number
 -- of significant bits.
-significance :: Approx -> Extended Int
-significance (Approx _ 0 _) = PosInf
-significance (Approx 0 _ _) = NegInf
-significance (Approx m 1 _) =  Finite $ integerLog2 (abs m) - 1
-significance (Approx m e _) =
+significance' :: A -> Extended Int
+significance' (A _ 0 _) = PosInf
+significance' (A 0 _ _) = NegInf
+significance' (A m 1 _) =  Finite $ integerLog2 (abs m) - 1
+significance' (A m e _) =
     Finite $ (integerLog2 (abs m)) - (integerLog2 (e-1)) - 1
-significance ABottom         = NegInf
--}
+significance' (A' _ 0 _) = PosInf
+significance' (A' 0 _ _) = NegInf
+significance' (A' m 1 _) =  Finite $ integerLog2 (abs m) - 1
+significance' (A' m e _) =
+    Finite $ (integerLog2 (abs m)) - (integerLog2 (e-1)) - 1
+significance' ABottom         = NegInf
 
 {-|
 This function bounds the error term of an 'Approx'.
@@ -775,9 +799,10 @@ desirable to be as close to the identity as possible.
 
 This function will map a converging sequence to a converging sequence.
 -}
-boundErrorTerm :: A -> A
-boundErrorTerm ABottom = ABottom
-boundErrorTerm a@(A m e s)
+instance ApproxOps A where
+  --boundErrorTerm :: A -> A
+  boundErrorTerm ABottom = ABottom
+  boundErrorTerm a@(A m e s)
     | e < errorBound = a
     | otherwise =
         let k = integerLog2 e + 1 - errorBits
@@ -788,7 +813,7 @@ boundErrorTerm a@(A m e s)
         in if t
            then A (m'+1) e' (s+k)
            else A m'     e' (s+k)
-boundErrorTerm a@(A' m e s)
+  boundErrorTerm a@(A' m e s)
     | e < errorBound = a
     | otherwise =
         let k = integerLog2 e + 1 - errorBits
@@ -799,8 +824,10 @@ boundErrorTerm a@(A' m e s)
         in if t
            then A' (m'+1) e' (s+k)
            else A' m'     e' (s+k)
+  checkPrecisionLeft = undefined
+  poly = undefined
+  powers = undefined
 
-{-
 {-|
 Limits the size of an approximation by restricting how much precision an
 approximation can have.
@@ -824,50 +851,60 @@ a fixed precision argument. However, if the function is applied with
 increasing precision for a converging sequence, then this will give a
 converging sequence.
 -}
-limitSize :: Precision -> Approx -> Approx
-limitSize _ ABottom = ABottom
-limitSize l a@(Approx m e s)
-    | k > 0     = Approx
+  --limitSize :: Precision -> A -> A
+  limitSize _ ABottom = ABottom
+  limitSize l a@(A m e s)
+    | k > 0     = A
+                  ((if testBit m (k-1) then (+1) else id) (unsafeShiftR m k))
+                  (1 + (unsafeShiftR (e + bit (k-1)) k))
+                  (-l)
+    | otherwise = a
+    where k = (-s)-l
+  limitSize l a@(A' m e s)
+    | k > 0     = A'
                   ((if testBit m (k-1) then (+1) else id) (unsafeShiftR m k))
                   (1 + (unsafeShiftR (e + bit (k-1)) k))
                   (-l)
     | otherwise = a
     where k = (-s)-l
 
+{-
 -- |Throws an exception if the precision of an approximation is not larger
 -- than the deafult minimum.
-checkPrecisionLeft :: Approx -> Approx
-checkPrecisionLeft a
-        | precision a > pure defaultPrecision = a
-        | otherwise = throw $ LossOfPrecision
+  --checkPrecisionLeft :: A -> A
+  checkPrecisionLeft a
+    | precision a > pure defaultPrecision = a
+    | otherwise = throw $ LossOfPrecision
+-}
 
 -- |Bounds the error term and limits the precision of an approximation.
 --
 -- It is always the case that @x `'better'` limitAndBound x@.
-limitAndBound :: Precision -> Approx -> Approx
-limitAndBound limit =
+  --limitAndBound :: Precision -> A -> A
+  limitAndBound limit =
     limitSize limit . boundErrorTerm
 
 -- | Find the hull of two approximations.
-unionA :: Approx -> Approx -> Approx
-unionA ABottom _ = ABottom
-unionA _ ABottom = ABottom
-unionA a b = endToApprox (lowerBound a `min` lowerBound b) (upperBound a `max` upperBound b)
+  --unionA :: A -> A -> A
+  unionA ABottom _ = ABottom
+  unionA _ ABottom = ABottom
+  unionA a b = undefined --endToA (lowerBound' a `min` lowerBound' b) (upperBound' a `max` upperBound' b)
 
 -- | Find the intersection of two approximations.
-intersectionA :: Approx -> Approx -> Approx
-intersectionA ABottom a = a
-intersectionA a ABottom = a
-intersectionA a b = if l <= u then endToApprox l u else error "Trying to take intersection of two non-overlapping Approx."
-  where l = (lowerBound a `max` lowerBound b)
-        u = (upperBound a `min` upperBound b)
+  --intersectionA :: A -> A -> A
+  intersectionA ABottom a = a
+  intersectionA a ABottom = a
+  intersectionA a b = undefined --if l <= u then endToA l u else error "Trying to take intersection of two non-overlapping A."
+    where l = (lowerBound' a `max` lowerBound' b)
+          u = (upperBound' a `min` upperBound' b)
 
 -- | Determine if two approximations overlap.
-consistentA :: Approx -> Approx -> Bool
-consistentA ABottom _ = True
-consistentA _ ABottom = True
-consistentA a b = (lowerBound a `max` lowerBound b) <= (upperBound a `min` upperBound b)
+  --consistentA :: A -> A -> Bool
+  consistentA ABottom _ = True
+  consistentA _ ABottom = True
+  consistentA a b = (lowerBound' a `max` lowerBound' b) <= (upperBound' a `min` upperBound' b)
 
+{-
 -- |Given a list of polynom coefficients and a value this evaluates the
 -- polynomial at that value.
 --

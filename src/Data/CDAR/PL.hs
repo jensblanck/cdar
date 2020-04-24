@@ -447,6 +447,22 @@ instance IntervalOps A where
     && toRational (m+e)*2^^s <= toRational (n+f)*2^^t
 
 -- |Construct a centred approximation from the end-points.
+endToA :: Precision -> A -> A -> A
+endToA p l u
+  | u < 0 && 0 < l = A' 0 1 0
+  | u < l = ABottom
+  | otherwise =
+    case (l,u) of
+      (A m e s, A n f t) ->
+        let r = min s t
+            m' = unsafeShiftL m (s-r)
+            n' = unsafeShiftL n (t-r)
+        in A (m'+n') (n'-m') (r-1)
+      (A m e s, A' n f t) -> A 0 1 0
+      (A' m e s, A n f t) -> A 0 2 0
+      (A' m e s, A' n f t) -> A' 0 2 0
+      
+{-
 endToA :: A -> A -> A
 endToA (A m _ s) (A n _ t)
   | n' < m' = ABottom -- Might be better with a signalling error.
@@ -455,7 +471,7 @@ endToA (A m _ s) (A n _ t)
          m'       = unsafeShiftL m (s-r)
          n'       = unsafeShiftL n (t-r)
 endToA _ _ = ABottom
-
+-}
 -- |Construct a centred approximation from the end-points.
 endToA' :: A -> A -> A
 endToA' (A' m _ s) (A' n _ t)

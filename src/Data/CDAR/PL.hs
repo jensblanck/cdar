@@ -14,6 +14,8 @@ module Data.CDAR.PL (A(..)
                     ,upperBound'
                     ,lowerBound'
                     ,centre'
+                    ,lbA
+                    ,ubA
                     ,plusA
                     ,timesA
                     ,recipA'
@@ -493,6 +495,16 @@ centre' (A m _ s) = Just (fromIntegral m * 2^^s)
 centre' (A' m _ s) = Just (2^s % m)
 centre' _ = Nothing
 
+lbA :: A -> A
+lbA (A m e s) = A (m-e) 0 s
+lbA (A' m e s) = A' (m+e) 0 s
+lbA _ = ABottom
+
+ubA :: A -> A
+ubA (A m e s) = A (m+e) 0 s
+ubA (A' m e s) = A' (m-e) 0 s
+ubA _ = ABottom
+
 {-
 -- |Returns 'True' if the approximation is exact, i.e., it's diameter is 0.
 exact :: Approx -> Bool
@@ -692,16 +704,16 @@ divAInteger' (A m e s) n =
 divAInteger' (A' m e s) n = A' (m*n) (e*n) s
 
 toChart :: Int -> Precision -> A -> A
-toChart 0 _ x@(A m e s) = x
-toChart 0 p x@(A' m e s) =
+toChart 0 _ x@(A _ _ _) = x
+toChart 0 p x@(A' _ _ _) =
   case recipA' p x of
     (A' n f t) -> (A n f t)
     _ -> ABottom
-toChart 1 p x@(A m e s) =
+toChart 1 p x@(A _ _ _) =
   case recipA' p x of
     (A n f t) -> (A' n f t)
     _ -> ABottom
-toChart 1 _ x@(A' m e s) = x
+toChart 1 _ x@(A' _ _ _) = x
 toChart _ _ _ = ABottom
 
 {-
@@ -754,6 +766,37 @@ compareA' _ _ = Nothing
 -- |Not a proper Ord type as A are intervals.
 instance Ord A where
   compare x y = maybe (error "compare: comparisons are partial on A") id $ compareA' x y
+  min (A m e s) (A n f t) =
+    let  r = min s t
+         m' = unsafeShiftL (m-e) (s-r)
+         n' = unsafeShiftL (n-f) (t-r)
+    in A (if m' <= n' then m' else n') 0 r
+  min (A m e s) (A' n f t) =
+    if (m-e)*(n+f) < shiftL 1 (-s-t) then (A (m-e) 0 s) else (A' (n+f) 0 t)
+  min (A' m e s) (A n f t) =
+    if (m+e)*(n-f) > shiftL 1 (-s-t) then (A' (m+e) 0 s) else (A (n-f) 0 t)
+  min (A' m e s) (A' n f t) =
+    let  r = min s t
+         m' = unsafeShiftL (m+e) (s-r)
+         n' = unsafeShiftL (n+f) (t-r)
+    in A' (if m' >= n' then m' else n') 0 r
+  min _ _ = ABottom
+  max (A m e s) (A n f t) =
+    let  r = min s t
+         m' = unsafeShiftL (m+e) (s-r)
+         n' = unsafeShiftL (n+f) (t-r)
+    in A (if m' >= n' then m' else n') 0 r
+  max (A m e s) (A' n f t) =
+    if (m+e)*(n-f) > shiftL 1 (-s-t) then (A (m+e) 0 s) else (A' (n-f) 0 t)
+  max (A' m e s) (A n f t) =
+    if (m-e)*(n+f) < shiftL 1 (-s-t) then (A' (m-e) 0 s) else (A (n+f) 0 t)
+  max (A' m e s) (A' n f t) =
+    let  r = min s t
+         m' = unsafeShiftL (m-e) (s-r)
+         n' = unsafeShiftL (n-f) (t-r)
+    in A' (if m' <= n' then m' else n') 0 r
+  max _ _ = ABottom
+
 
 -- |The 'toRational' function is partial since there is no good rational
 -- number to return for the trivial approximation 'ABottom'.
@@ -909,7 +952,7 @@ converging sequence.
   --unionA :: A -> A -> A
   unionA ABottom _ = ABottom
   unionA _ ABottom = ABottom
-  unionA a b = undefined --endToA (lowerBound' a `min` lowerBound' b) (upperBound' a `max` upperBound' b)
+  unionA a b = undefined --endToA (min a b) (max a b)
 
 -- | Find the intersection of two approximations.
   --intersectionA :: A -> A -> A

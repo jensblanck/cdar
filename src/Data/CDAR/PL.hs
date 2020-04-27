@@ -11,7 +11,6 @@ For more information on the theoretical aspects see <http://cs.swan.ac.uk/~csjen
 module Data.CDAR.PL (A(..)
                     ,PL(..)
                     ,endToA
-                    ,endToA'
                     ,upperBound'
                     ,lowerBound'
                     ,centre'
@@ -19,6 +18,7 @@ module Data.CDAR.PL (A(..)
                     ,timesA
                     ,recipA'
                     ,divAInteger'
+                    ,toChart
                     ,compareA'
                     , significance'
 {-                        ,Precision
@@ -448,48 +448,40 @@ instance IntervalOps A where
 
 -- |Construct a centred approximation from the end-points.
 endToA :: Precision -> A -> A -> A
-endToA p l u
-  | u < 0 && 0 < l = A' 0 1 0
-  | u < l = ABottom
-  | otherwise =
-    case (l,u) of
-      (A m e s, A n f t) ->
-        let r = min s t
-            m' = unsafeShiftL m (s-r)
-            n' = unsafeShiftL n (t-r)
-        in A (m'+n') (n'-m') (r-1)
-      (A m e s, A' n f t) -> A 0 1 0
-      (A' m e s, A n f t) -> A 0 2 0
-      (A' m e s, A' n f t) -> A' 0 2 0
-      
-{-
-endToA :: A -> A -> A
-endToA (A m _ s) (A n _ t)
-  | n' < m' = ABottom -- Might be better with a signalling error.
-  | otherwise = (A (m'+n') (n'-m') (r-1))
-  where  r        = min s t
-         m'       = unsafeShiftL m (s-r)
-         n'       = unsafeShiftL n (t-r)
-endToA _ _ = ABottom
--}
--- |Construct a centred approximation from the end-points.
-endToA' :: A -> A -> A
-endToA' (A' m _ s) (A' n _ t)
-  | m' < n' = ABottom -- Might be better with a signalling error.
-  | otherwise = (A' (m'+n') (m'-n') (r-1))
-  where r        = min s t
-        m'       = unsafeShiftL m (s-r)
-        n'       = unsafeShiftL n (t-r)
-endToA' _ _ = ABottom
+endToA p l@(A m e s) u@(A n f t)
+  | unsafeShiftL (m+e) (s-r) <= unsafeShiftL (n-f) (t-r) =
+    let  m'       = unsafeShiftL (m-e) (s-r)
+         n'       = unsafeShiftL (n+f) (t-r)
+    in A (m'+n') (n'-m') (r-1)
+  | m-e > 0 && 0 > n+f = endToA p (toChart 1 p l) (toChart 1 p u)
+  | otherwise = ABottom
+  where r = min s t
+endToA p l@(A m e s) u@(A' n f t)
+  | (m+e) * (n+f) < unsafeShiftL 1 (max 0 (-s-t)) = endToA p l (toChart 0 p u)
+  | m-e > 0 && 0 > n+f = endToA p (toChart 1 p l) u
+  | otherwise = ABottom
+endToA p l@(A' m e s) u@(A n f t)
+  | (m-e) * (n-f) > shiftL 1 (-s-t) = endToA p (toChart 0 p l) u
+  | m-e > 0 && 0 > n+f = endToA p l (toChart 1 p u)
+  | otherwise = ABottom
+endToA p l@(A' m e s) u@(A' n f t)
+  | unsafeShiftL (m-e) (s-r) >= unsafeShiftL (n+f) (t-r) =
+    let  m'       = unsafeShiftL (m+e) (s-r)
+         n'       = unsafeShiftL (n-f) (t-r)
+    in A' (m'+n') (m'-n') (r-1)
+  | m+e < 0 && 0 < n-f = endToA p (toChart 0 p l) (toChart 0 p u)
+  | otherwise = ABottom
+  where r = min s t
+endToA _ _ _ = ABottom
 
 -- Interval operations
--- |Gives the lower bound of an approximation as an 'Extended' 'Dyadic' number.
+-- |Gives the lower bound of an approximation as an 'Extended' 'Rational' number.
 lowerBound' :: A -> Extended Rational
 lowerBound' (A m e s) = Finite ((m-e)%1 * 2^^ fromIntegral s)
 lowerBound' (A' m e s) = Finite ((toRational 2^^s) * (1 % (m+e)))
 lowerBound' ABottom = NegInf
 
--- |Gives the upper bound of an approximation as an 'Extended' 'Dyadic' number.
+-- |Gives the upper bound of an approximation as an 'Extended' 'Rational' number.
 upperBound' :: A -> Extended Rational
 upperBound' (A m e s) = Finite ((m+e)%1 * 2^^ fromIntegral s)
 upperBound' (A' m e s) = Finite ((toRational 2^^s) * (1 % (m-e)))
@@ -698,6 +690,19 @@ divAInteger' (A m e s) n =
        (max 1 (ceiling (unsafeShiftL e t % n)))
        (s - t)
 divAInteger' (A' m e s) n = A' (m*n) (e*n) s
+
+toChart :: Int -> Precision -> A -> A
+toChart 0 _ x@(A m e s) = x
+toChart 0 p x@(A' m e s) =
+  case recipA' p x of
+    (A' n f t) -> (A n f t)
+    _ -> ABottom
+toChart 1 p x@(A m e s) =
+  case recipA' p x of
+    (A n f t) -> (A' n f t)
+    _ -> ABottom
+toChart 1 _ x@(A' m e s) = x
+toChart _ _ _ = ABottom
 
 {-
 -- |Compute the modulus of two approximations.

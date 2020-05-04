@@ -667,20 +667,6 @@ converging sequence.
   limitAndBound limit =
     limitSize limit . boundErrorTerm
 
--- | Find the hull of two approximations.
-  --unionA :: Approx -> Approx -> Approx
-  unionA Bottom _ = Bottom
-  unionA _ Bottom = Bottom
-  unionA a b = endToApprox (lowerBound a `min` lowerBound b) (upperBound a `max` upperBound b)
-
--- | Find the intersection of two approximations.
-  --intersectionA :: Approx -> Approx -> Approx
-  intersectionA Bottom a = a
-  intersectionA a Bottom = a
-  intersectionA a b = if l <= u then endToApprox l u else error "Trying to take intersection of two non-overlapping Approx."
-    where l = (lowerBound a `max` lowerBound b)
-          u = (upperBound a `min` upperBound b)
-
 -- | Determine if two approximations overlap.
   --consistentA :: Approx -> Approx -> Bool
   consistentA Bottom _ = True
@@ -732,6 +718,20 @@ binomialCoefficients :: (Num a) => [[a]]
 binomialCoefficients =
     let f ss = 1 : zipWith (+) ss (tail ss) ++ [1]
     in iterate f [1]
+
+-- | Find the hull of two approximations.
+unionA :: Approx -> Approx -> Approx
+unionA Bottom _ = Bottom
+unionA _ Bottom = Bottom
+unionA a b = endToApprox (lowerBound a `min` lowerBound b) (upperBound a `max` upperBound b)
+
+-- | Find the intersection of two approximations.
+intersectionA :: Approx -> Approx -> Approx
+intersectionA Bottom a = a
+intersectionA a Bottom = a
+intersectionA a b = if l <= u then endToApprox l u else error "Trying to take intersection of two non-overlapping Approx."
+  where l = (lowerBound a `max` lowerBound b)
+        u = (upperBound a `min` upperBound b)
 
 {-|
 Old implementation of sqrt using Heron's method. Using the current method

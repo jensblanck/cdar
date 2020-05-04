@@ -37,8 +37,6 @@ class ApproxOps a where
   limitSize :: Precision -> a -> a
   checkPrecisionLeft :: a -> a
   limitAndBound :: Precision -> a -> a
-  unionA :: a -> a -> a
-  intersectionA :: a -> a -> a
   consistentA :: a -> a -> Bool
   poly :: [a] -> a -> a
   powers :: a -> [a]

@@ -22,7 +22,13 @@ module Data.CDAR.PL (A(..)
                     ,divAInteger'
                     ,toChart
                     ,compareA'
-                    , significance'
+                    ,significance'
+                    ,unionA'
+                    ,intersectionA'
+                    ,aToApprox
+                    ,approxToA
+                    ,sqrtA'
+                    ,sqrA'
 {-                        ,Precision
                         ,showA
                         ,showInBaseA
@@ -134,6 +140,7 @@ import           Control.DeepSeq
 import           Control.Exception
 import           Data.Bits
 import           Data.Char (isDigit)
+import           Data.CDAR.Approx
 import           Data.CDAR.Classes
 import           Data.CDAR.Dyadic
 import           Data.CDAR.Extended
@@ -307,6 +314,8 @@ instance ShowApprox A where
   showInBaseA _ (A' 0 0 _) = "∞"
   showInBaseA base (A' m e s)
     | exactA'   = sign ++ showExactA' base i n' d
+    | m == e    = "≥" ++ showNearInfinityA' base (d+e) n
+    | m == -e    = "≤-" ++ showNearInfinityA' base (d+e) n
     | am <= e    = "|·|≥" ++ showNearInfinityA' base (d+e) n
     | otherwise = sign ++ showInexactA base d' i' f' (max 1 (n*e))
     where am = abs m
@@ -804,13 +813,9 @@ instance Ord A where
 -- Note that converting to a rational number will give only a single rational
 -- point. Do not expect to be able to recover the interval from this value.
 instance Real A where
-  toRational (A m e s) = approxRational
-                           (toRational (m:^s))
-                           (toRational (e:^s))
-  toRational (A' m e s) = approxRational
-                            ((m % (m^2-e^2)) * 2^^(-s))
-                            ((e % (m^2-e^2)) * 2^^(-s))
-  toRational _ = undefined
+  toRational (A m _ s) = toRational m * 2^^s
+  toRational (A' m _ s) = 2^^(-s) / toRational m
+  toRational _ = error "toRational of ABottom"
 
 -- |Convert the centre of an approximation into a 'Maybe' 'Double'.
 instance ToDouble A where
@@ -948,25 +953,25 @@ converging sequence.
   limitAndBound limit =
     limitSize limit . boundErrorTerm
 
--- | Find the hull of two approximations.
-  --unionA :: A -> A -> A
-  unionA ABottom _ = ABottom
-  unionA _ ABottom = ABottom
-  unionA a b = undefined --endToA (min a b) (max a b)
-
--- | Find the intersection of two approximations.
-  --intersectionA :: A -> A -> A
-  intersectionA ABottom a = a
-  intersectionA a ABottom = a
-  intersectionA a b = undefined --if l <= u then endToA l u else error "Trying to take intersection of two non-overlapping A."
-    where l = (lowerBound' a `max` lowerBound' b)
-          u = (upperBound' a `min` upperBound' b)
-
 -- | Determine if two approximations overlap.
   --consistentA :: A -> A -> Bool
   consistentA ABottom _ = True
   consistentA _ ABottom = True
   consistentA a b = (lowerBound' a `max` lowerBound' b) <= (upperBound' a `min` upperBound' b)
+
+-- | Find the hull of two approximations.
+unionA' :: Precision -> A -> A -> A
+unionA' _ ABottom _ = ABottom
+unionA' _ _ ABottom = ABottom
+unionA' p a b = endToA p (min a b) (max a b)
+
+-- | Find the intersection of two approximations.
+intersectionA' :: Precision -> A -> A -> A
+intersectionA' _ ABottom a = a
+intersectionA' _ a ABottom = a
+intersectionA' p a b = undefined --if l <= u then endToA l u else error "Trying to take intersection of two non-overlapping A."
+  where l = (lowerBound' a `max` lowerBound' b)
+        u = (upperBound' a `min` upperBound' b)
 
 {-
 -- |Given a list of polynom coefficients and a value this evaluates the
@@ -988,16 +993,6 @@ poly as x =
         (Finite (e':^_)) = fmap (b*) $ radius x
         -- exponent above will be same as s
     in Approx m' e' s
-
--- |Gives a list of powers of a number, i.e., [1,x,x^2,...].
-pow :: (Num a) => a -> [a]
-pow x = iterate (* x) 1
-
--- |Computes lists of binomial coefficients. [[1], [1,1], [1,2,1], [1,3,3,1], ...]
-binomialCoefficients :: (Num a) => [[a]]
-binomialCoefficients =
-    let f ss = 1 : zipWith (+) ss (tail ss) ++ [1]
-    in iterate f [1]
 
 -- |Computes powers of approximations. Should give tighter intervals than the
 -- general 'pow' since take the dependency problem into account. However, so
@@ -1049,7 +1044,24 @@ input approximation.
 sqrtA :: Precision -> Approx -> Approx
 sqrtA _ x@(Approx 0 0 _) =  x
 sqrtA k x = limitAndBound k $ x * sqrtRecA k x
+-}
+sqrtA' :: Precision -> A -> A
+sqrtA' _ x@(A 0 0 _) =  x
+sqrtA' k x@(A _ _ _) = limitAndBound k $ x * approxToA (sqrtRecA k (aToApprox x))
+sqrtA' _ x@(A' 0 0 _) =  x
+sqrtA' k x@(A' _ _ _) = limitAndBound k $ x * approxToA (sqrtRecA k (aToApprox x))
+sqrtA' _ ABottom = undefined
 
+approxToA :: Approx -> A
+approxToA (Approx m e s) = A m e s
+approxToA Bottom = ABottom
+
+aToApprox :: A -> Approx
+aToApprox (A m e s) = Approx m e s
+aToApprox (A' m e s) = Approx m e s
+aToApprox ABottom = Bottom
+
+{-
 {-|
 This uses Newton's method for computing the reciprocal of the square root.
 -}
@@ -1115,6 +1127,20 @@ sqrA (Approx m e s)
   | am > e = Approx (m^(2 :: Int) + e^(2 :: Int)) (2*abs m*e) (2*s)
   | otherwise = let m' = (am + e)^(2 :: Int) in Approx m' m' (2*s-1)
   where am = abs m
+-}
+
+sqrA' :: A -> A
+sqrA' ABottom = ABottom
+sqrA' (A m e s)
+  | am > e = A (m^(2 :: Int) + e^(2 :: Int)) (2*am*e) (2*s)
+  | otherwise = let m' = (am + e)^(2 :: Int) in A m' m' (2*s-1)
+  where am = abs m
+sqrA' (A' m e s)
+  | am > e = A' (m^(2 :: Int) + e^(2 :: Int)) (2*am*e) (2*s)
+  | otherwise = let m' = (am + e)^(2 :: Int) in A' m' m' (2*s-1)
+  where am = abs m
+
+{-
 -- Binary splitting
 
 {-|

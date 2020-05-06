@@ -25,10 +25,12 @@ module Data.CDAR.PL (A(..)
                     ,significance'
                     ,unionA'
                     ,intersectionA'
-                    ,aToApprox
-                    ,approxToA
                     ,sqrtA'
                     ,sqrA'
+                    ,taylorA'
+                    ,ones
+                    ,fac
+                    ,oddFac
 {-                        ,Precision
                         ,showA
                         ,showInBaseA
@@ -1049,12 +1051,16 @@ sqrtA' :: Precision -> A -> A
 sqrtA' _ x@(A 0 0 _) =  x
 sqrtA' k x@(A _ _ _) = limitAndBound k $ x * approxToA (sqrtRecA k (aToApprox x))
 sqrtA' _ x@(A' 0 0 _) =  x
-sqrtA' k x@(A' _ _ _) = limitAndBound k $ x * approxToA (sqrtRecA k (aToApprox x))
+sqrtA' k x@(A' _ _ _) = limitAndBound k $ approxToA' (sqrtRecA k (aToApprox x))
 sqrtA' _ ABottom = undefined
 
 approxToA :: Approx -> A
 approxToA (Approx m e s) = A m e s
 approxToA Bottom = ABottom
+
+approxToA' :: Approx -> A
+approxToA' (Approx m e s) = A' m e s
+approxToA' Bottom = ABottom
 
 aToApprox :: A -> Approx
 aToApprox (A m e s) = Approx m e s
@@ -1140,7 +1146,6 @@ sqrA' (A' m e s)
   | otherwise = let m' = (am + e)^(2 :: Int) in A' m' m' (2*s-1)
   where am = abs m
 
-{-
 -- Binary splitting
 
 {-|
@@ -1199,10 +1204,10 @@ precision bound. The sum is adjusted for the tail of the series. For this to
 be correct we need the the terms to converge geometrically to 0 by a factor of
 at least 2.
 -}
-taylor :: Precision -> [Approx] -> [Integer] -> Approx
+taylor :: Precision -> [A] -> [Integer] -> A
 taylor res as qs =
   let res' = res + errorBits
-      f a q = limitAndBound res' $ a * recipA res' (fromIntegral q)
+      f a q = limitAndBound res' $ a * recipA' res' (fromIntegral q)
       bs = zipWith f as qs
       (cs,(d:_)) = span nonZeroCentredA bs -- This span and the sum on the next line do probably not fuse!
   in fudge (sum cs) d
@@ -1225,9 +1230,9 @@ evenFac = let f (x:_:xs) = x:f xs
 -}
 
 -- | Checks if the centre of an approximation is not 0.
-nonZeroCentredA :: Approx -> Bool
+nonZeroCentredA :: A -> Bool
 nonZeroCentredA ABottom = False
-nonZeroCentredA (Approx 0 _ _) = False
+nonZeroCentredA (A 0 _ _) = False
 nonZeroCentredA _ = True
 
 -- This version is faster especially far smaller precision.
@@ -1239,10 +1244,11 @@ Terms are added as long as they are larger than the current precision bound.
 The sum is adjusted for the tail of the series. For this to be correct we need
 the the terms to converge geometrically to 0 by a factor of at least 2.
 -}
-taylorA :: Precision -> [Approx] -> Approx -> Approx
-taylorA res as x =
+taylorA' :: Precision -> [A] -> A -> A
+taylorA' res as x =
   sum . takeWhile nonZeroCentredA . map (limitAndBound res) $ zipWith (*) as (pow x)
 
+{-
 {- Exponential computed by standard Taylor expansion after range reduction.
 -}
 
@@ -1598,21 +1604,22 @@ piRaw = unfoldr f (1, (1, 1, 1, 13591409))
 -- | Computes an 'Approx' of π of the given precision.
 piA :: Precision -> Approx
 piA res = limitAndBound res . head $ dropWhile ((< pure res) . precision) piRaw
+-}
 
 {-|
 Second argument is noice to be added to first argument. Used to allow for the
 error term when truncating a series.
 -}
-fudge :: Approx -> Approx -> Approx
-fudge (Approx m 0 s) (Approx m' e' s') =
-  Approx (m `shift` (s - s')) (abs m' + e' + 1) s'
-fudge (Approx m e s) (Approx m' e' s') =
+fudge :: A -> A -> A
+fudge (A m 0 s) (A m' e' s') =
+  A (m `shift` (s - s')) (abs m' + e' + 1) s'
+fudge (A m e s) (A m' e' s') =
   let m'' = 1 + (abs m' + e') `shift` (s' - s + 1)
-  in Approx m (e+m'') s
+  in A m (e+m'') s
 fudge _ _  = ABottom
 
 --
-
+{-
 -- | Compute π using Machin's formula. Lifted from computation on dyadic numbers.
 piMachinA :: Precision -> Approx
 piMachinA t = let (m:^s) = piMachinD (-t) in Approx m 1 s

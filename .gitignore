@@ -16,3 +16,5 @@ stack.yaml
 cdar.log
 bench.html
 .stack-work/
+hie.yaml
+lll.pdf

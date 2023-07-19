@@ -1,4 +1,5 @@
 dist
+dist-newstyle
 cabal-dev
 *~
 *.o
@@ -12,7 +13,7 @@ cabal-dev
 cabal.sandbox.config
 cabal.config
 Test
-stack.yaml
+stack.yaml*
 cdar.log
 bench.html
 .stack-work/

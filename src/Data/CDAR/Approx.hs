@@ -401,7 +401,7 @@ centreA Bottom = Bottom
 centreA (Approx m _ s) = Approx m 0 s
 
 -- |Gives the radius of an approximation as a 'Dyadic' number. Currently a
--- partial function. Should be made to return an 'Extended' 'Dyadic'.
+-- partial function.
 radius :: Approx -> Extended Dyadic
 radius (Approx _ e s) = Finite (e:^s)
 radius _ = PosInf

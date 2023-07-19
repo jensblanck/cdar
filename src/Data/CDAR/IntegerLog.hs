@@ -10,7 +10,7 @@ import GHC.Exts
 {-# INLINE integerLog2 #-}
 {- |The 'integerLog2' function gives the floor of the logarithm of a positive integer. For non-positive arguments the returned result is meaningless. Possible overflow of returned value is ignored.
 
-It could be argued that NegInf should be returned for 0 if the return type had been 'Extended' 'Int'.
+It could be argued that NegInf should be returned for 0 if the return type had been 'Extended.Extended' 'Int'.
 -}
 integerLog2 :: Integer -> Int
 integerLog2 n = I# (integerLog2# n)
